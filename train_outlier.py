@@ -38,7 +38,8 @@ def train():
         raise ValueError('save_path already exists')
     
     if 'cifar' in args.data:
-        train_loader, valid_loader = utils.get_cifar_jigsaw(args.data, dataset_path, batch_size)
+        train_loader, valid_loader = utils.get_cifar(args.data, dataset_path, batch_size)
+        outlier_loader = utils.get_tinyimagenet('/SSDe/yyg', batch_size)
     elif 'svhn' == args.data:
         train_loader, valid_loader = utils.get_train_svhn(dataset_path, batch_size)
     elif 'domainnet' == args.data:        
@@ -73,11 +74,13 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
-        for batch_idx, (inputs, input_jigsaw, input_blur, targets) in enumerate(train_loader):
-            inputs, input_jigsaw, input_blur, targets = inputs.to(device), input_jigsaw.to(device), input_blur.to(device), targets.to(device)
+        for batch_idx, (data1, data2) in enumerate(zip(train_loader, outlier_loader)):
+            inputs1, targets = data1
+            inputs2, _  = data2
+            inputs1, inputs2, targets = inputs1.to(device), inputs2.to(device), targets.to(device)
             optimizer.zero_grad()
 
-            inputs = torch.cat([inputs, input_jigsaw], dim=0)
+            inputs = torch.cat([inputs1, inputs2], dim=0)
             
             x = model.forward_features(inputs)            
             features = model.global_pool(x).view(-1, 512)

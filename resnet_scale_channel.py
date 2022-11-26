@@ -57,11 +57,12 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        self.norm_layer = nn.Conv2d(512, 2048, kernel_size=1, stride=1, padding=0, bias=False)
+        
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512, num_classes)
+        self.fc = nn.Linear(2048, num_classes)
         self.act1 = nn.ReLU()
 
-        self.scale = np.log(99 * num_classes - 99)
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
@@ -101,11 +102,11 @@ class ResNet(nn.Module):
         out = self.layer2(out)
         out = self.layer3(out)
         out = self.layer4(out)
-        # out_ = self.global_pool(out)
-        # out_ = torch.flatten(out_, 1)
-        # out_ = out_ * self.scale
+        out = self.norm_layer(out)
+        out_ = self.global_pool(out)
+        out_ = torch.flatten(out_, 1)
         
-        return out# * self.scale
+        return out
 
 def resnet18(**kwargs):
     return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)

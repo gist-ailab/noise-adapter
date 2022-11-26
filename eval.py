@@ -36,17 +36,41 @@ def eval():
         _, valid_loader = get_cifar(args.data, dataset_path, batch_size)
     else:
         valid_loader = get_svhn(dataset_path, batch_size)
-
-    if args.net =='resnet18_sigmoid':
-        model = resnet_sigmoid.resnet18(num_classes = num_classes)
-    if args.net =='resnet18_scale':
-        model = resnet_scale.resnet18(num_classes = num_classes)
-    if args.net =='resnet18':
+        
+    if 'resnet18' == args.net:
         model = timm.create_model(args.net, pretrained=False, num_classes=num_classes)
         model.conv1 = torch.nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         model.maxpool = torch.nn.MaxPool2d(kernel_size=1, stride=1, padding=0)
         
-                
+    if 'resnet18_sigmoid' == args.net:
+        import resnet_sigmoid
+        print('resnet_sigmoid')
+        model = resnet_sigmoid.resnet18(num_classes=num_classes)
+        
+    if 'resnet18_scale' == args.net:
+        import resnet_scale
+        print('resnet_scale')
+        model = resnet_scale.resnet18(num_classes=num_classes)
+        
+    if 'resnet18_order' == args.net:
+        import resnet_order
+        print('resnet_order')
+        model = resnet_order.resnet18(num_classes=num_classes)
+        
+    if 'resnet18_layer' == args.net:
+        import resnet_scale_channel
+        print('resnet18_layer')
+        model = resnet_scale_channel.resnet18(num_classes=num_classes)
+        
+    if 'resnet18_act' == args.net:
+        import resnet_act
+        print('resnet_act')
+        model = resnet_act.resnet18(num_classes=num_classes)
+                        
+    if 'resnet18_ood' == args.net:
+        import resnet_ood
+        print('resnet_ood')
+        model = resnet_ood.resnet18(num_classes=num_classes)
     state_dict = (torch.load(save_path+'/last.pth.tar', map_location = device)['state_dict'])    
     model.load_state_dict(state_dict)
     model.to(device)
@@ -96,8 +120,9 @@ def eval():
     OOD_results(preds_in, model, get_lsun('/SSDe/yyg/data/ood-set/LSUN_resize'), device, args.method+'-LSUN-resize', f)
     OOD_results(preds_in, model, get_lsun('/SSDe/yyg/data/ood-set/iSUN'), device, args.method+'-iSUN', f)
     OOD_results(preds_in, model, get_places('/SSDd/yyg/data/places256'), device, args.method+'-Places365', f)
-    OOD_results(preds_in, model, get_mnist('/SSDe/yyg/data/ood-set/mnist', transform_imagenet = False), device, args.method+'-mnist', f)
-    OOD_results(preds_in, model, get_fnist('/SSDe/yyg/data/ood-set/fnist'), device, args.method+'-fashion-mnist', f)
+    
+    cifar = 'cifar100' if args.data == 'cifar10' else 'cifar10'
+    OOD_results(preds_in, model, get_cifar(cifar, '/SSDe/yyg/data/{}'.format(cifar), batch_size)[1], device, args.method+'-{}'.format(cifar), f)
     f.close()
 
 

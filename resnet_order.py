@@ -146,7 +146,7 @@ class ResNet(nn.Module):
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
-        out = F.relu(self.bn1(self.layer4(out)))
+        out = self.bn1(self.layer4(out))
         out_ = self.global_pool(out)
         out_ = torch.flatten(out_, 1)
         return out

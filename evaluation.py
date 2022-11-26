@@ -87,9 +87,17 @@ def calculate_norm(model, loader, device):
             x = model.layer2(x)            
             x = model.layer3(x)
             x = model.layer4[0](x)    
-            norm = torch.norm(x, p=2, dim=[2,3])
+            # x = model.layer4[1](x)  
+            # x = model.global_pool(x).view(-1, 512)
+            norm = torch.norm(x, p=2, dim=[2,3], keepdim=True).mean(1)
+            # print(norm.shape, x.shape)
+            # x = model.bn1(x)
+            # x = F.relu(x)
+            # x = model.conv2(x)
+            
+            # norm = torch.norm(F.relu(x), p=2, dim=[2,3])
 
-            predictions.append(norm.mean(dim=1))
+            predictions.append(norm)
     predictions = torch.cat(predictions).to(device)
     return predictions
 
@@ -223,15 +231,16 @@ def calculate_cosine(model, loader, device):
         for batch_idx, (inputs, t) in enumerate(loader):
             x = inputs.to(device)
             x = model.conv1(x)
-            x = model.bn1(x)
-            x = F.relu(x)
-            x = model.maxpool(x)
+
+            # x = model.maxpool(x)
 
             x = model.layer1(x)
             x = model.layer2(x)
             x = model.layer3(x)
             x = model.layer4(x)
-            x = model.avgpool(x)
+            x = model.global_pool(x)
+            x = model.bn1(x)
+            x = F.relu(x)
             features = torch.flatten(x, 1)            
             f_norm = torch.norm(features, dim=1, keepdim=True)
             outputs = model.fc(features/torch.clip(f_norm, min=1e-06))

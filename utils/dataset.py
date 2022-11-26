@@ -20,9 +20,7 @@ size = 32
 
 # , transforms.Normalize(mean, std)
 train_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.RandomHorizontalFlip(), transforms.RandomCrop(size, padding=4),
-                               transforms.ToTensor()])
-# test_transform_cifar = transforms.Compose([transforms.Resize([32,32]), transforms.ToTensor()])
-devider = 1.5
+                               transforms.ToTensor(), transforms.Normalize(mean, std)])
 test_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.ToTensor(), transforms.Normalize(mean, std)])#, )
 
 test_transform_gray = transforms.Compose([transforms.Resize([32,32]), transforms.ToTensor(), transforms.Lambda(lambda x: x.repeat(3, 1, 1))])
@@ -30,6 +28,52 @@ test_transform_gray = transforms.Compose([transforms.Resize([32,32]), transforms
 
 resize_size = [224, 224]
 crop_size = [224, 224]
+
+class jigsaw_train_dataset(data.Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
+        self.blur_transforms = transforms.Compose([transforms.Resize([2, 2]), transforms.Resize([size,size]), transforms.RandomHorizontalFlip(), transforms.RandomCrop(size, padding=4),
+                               transforms.ToTensor(), transforms.Normalize(mean, std)])
+    
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, index):
+        x, y = self.dataset[index]
+        img = self.dataset.data[index]
+        img = Image.fromarray(img)
+        img = self.blur_transforms(img)        
+        s = int(float(x.size(1)) / 3)
+        
+        
+        x_ = torch.zeros_like(x)
+        tiles_order = random.sample(range(9), 9)
+        for o, tile in enumerate(tiles_order):
+            i = int(o/3)
+            j = int(o%3)
+            
+            ti = int(tile/3)
+            tj = int(tile%3)
+            # print(i, j, ti, tj)
+            x_[:, i*s:(i+1)*s, j*s:(j+1)*s] = x[:, ti*s:(ti+1)*s, tj*s:(tj+1)*s] 
+        return x, x_, img, y
+    
+def get_cifar_jigsaw(dataset, folder, batch_size):
+    
+    if dataset == 'cifar10':
+        train_data = dset.CIFAR10(folder, train=True, transform=train_transform_cifar, download=True)
+        test_data = dset.CIFAR10(folder, train=False, transform=test_transform_cifar, download=True)
+
+    else:
+        train_data = dset.CIFAR100(folder, train=True, transform=train_transform_cifar, download=True)
+        test_data = dset.CIFAR100(folder, train=False, transform=test_transform_cifar, download=True)
+    jigsaw = jigsaw_train_dataset(train_data)
+    # print(jigsaw[0])
+
+    train_loader = torch.utils.data.DataLoader(jigsaw, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
+    valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    
+    return train_loader, valid_loader
 
 class jigsaw_dataset(data.Dataset):
     def __init__(self, dataset):
@@ -41,24 +85,24 @@ class jigsaw_dataset(data.Dataset):
     def __getitem__(self, index):
         x, y = self.dataset[index]
         
-        s = int(float(x.size(1)) / 9)
+        s = int(float(x.size(1)) / 3)
         
         
         x_ = torch.zeros_like(x)
-        tiles_order = random.sample(range(81), 81)
+        tiles_order = random.sample(range(9), 9)
         for o, tile in enumerate(tiles_order):
-            i = int(o/9)
-            j = int(o%9)
+            i = int(o/3)
+            j = int(o%3)
             
-            ti = int(tile/9)
-            tj = int(tile%9)
+            ti = int(tile/3)
+            tj = int(tile%3)
             # print(i, j, ti, tj)
             x_[:, i*s:(i+1)*s, j*s:(j+1)*s] = x[:, ti*s:(ti+1)*s, tj*s:(tj+1)*s] 
         return x_, y
         
 def get_cifar_test(dataset, folder, batch_size, test=False):
-    test_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.ToTensor()])
-    test_transform_cifar_blur = transforms.Compose([transforms.Resize([size,size]), transforms.ToTensor()])
+    test_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.ToTensor(), transforms.Normalize(mean, std)])
+    test_transform_cifar_blur = transforms.Compose([transforms.Resize([size,size]), transforms.ToTensor(), transforms.Normalize(mean, std)])
     train_ = not test
     
     if dataset == 'cifar10':
@@ -89,9 +133,6 @@ train_transforms = transforms.Compose([
     transforms.Resize(resize_size),
     transforms.CenterCrop(crop_size),
     transforms.RandomHorizontalFlip(),
-    transforms.RandomVerticalFlip(),
-
-    # transforms.Resize((224,224)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406],
                         std= [0.229, 0.224, 0.225]) 
@@ -135,7 +176,7 @@ def get_imagenet(dataset, imagenet_path, batch_size=32, eval=False):
     testset = torchvision.datasets.ImageFolder(imagenet_path+'/val', test_trans)
     # trainset = jigsaw_dataset(trainset)
     
-    train_loader = torch.utils.data.DataLoader(trainset, batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    train_loader = torch.utils.data.DataLoader(trainset, batch_size, shuffle=True, pin_memory=True, num_workers = 8)
     valid_loader = torch.utils.data.DataLoader(testset, batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
@@ -194,9 +235,8 @@ def get_outlier(path, batch_size):
 
 def get_tinyimagenet(path, batch_size):
     class TinyImages(torch.utils.data.Dataset):
-        def __init__(self, path, transform=None, exclude_cifar=True):
-            data_file = open(path+'/', "rb")
-
+        def __init__(self, path, transform=None, exclude_cifar=False):
+            data_file = open(path+'/data/300K_random_images.npy', "rb")                  
             def load_image(idx):
                 data_file.seek(idx * 3072)
                 data = data_file.read(3072)
@@ -220,21 +260,22 @@ def get_tinyimagenet(path, batch_size):
                 self.in_cifar = lambda x: x in self.cifar_idxs
 
         def __getitem__(self, index):
-            index = (index + self.offset) % 79302016
+            index = (index + self.offset) % 300000
 
             if self.exclude_cifar:
                 while self.in_cifar(index):
-                    index = np.random.randint(79302017)
+                    index = np.random.randint(300000)
 
             img = self.load_image(index)
+            img = Image.fromarray(img)
             if self.transform is not None:
                 img = self.transform(img)
 
             return img, 0  # 0 is the class
         def __len__(self):
-            return 79302017
+            return 300000
 
-    ood_data = TinyImages(path, test_transform_cifar, True)
+    ood_data = TinyImages(path, test_transform_cifar, False)
     ood_loader = torch.utils.data.DataLoader(ood_data, batch_size=batch_size, shuffle=True, pin_memory=True)
     return ood_loader
 
