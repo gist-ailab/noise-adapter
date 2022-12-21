@@ -2,8 +2,12 @@ import os
 import torch
 import argparse
 import timm
-
+import numpy as np
 import utils
+
+import random
+random.seed(0)
+np.random.seed(0)
 
 def train():
     parser = argparse.ArgumentParser()
@@ -11,6 +15,7 @@ def train():
     parser.add_argument('--data', '-d', type=str)
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--save_path', '-s', type=str)
+    parser.add_argument('--wd', '-w', type=float)
 
     args = parser.parse_args()
 
@@ -25,7 +30,7 @@ def train():
 
     batch_size = int(config['batch_size'])
     max_epoch = int(config['epoch'])
-    wd = 5e-04
+    wd = args.wd
     lrde = [50, 75, 90]
 
     print(model_name, dataset_path.split('/')[-2], batch_size, class_range)
@@ -38,31 +43,19 @@ def train():
         raise ValueError('save_path already exists')
     
     if 'cifar' in args.data:
-        train_loader, valid_loader = utils.get_cifar_jigsaw(args.data, dataset_path, batch_size)
-    elif 'svhn' == args.data:
-        train_loader, valid_loader = utils.get_train_svhn(dataset_path, batch_size)
-    elif 'domainnet' == args.data:        
-        train_loader, valid_loader = utils.get_domainnet(dataset_path, 'A', 'real', batch_size)
-    elif 'ham10000' == args.data:    
-        train_loader, valid_loader = utils.get_imagenet('ham10000', dataset_path, batch_size)
+        train_loader, valid_loader = utils.get_cifar(args.data, dataset_path, batch_size)
     print(args.net)
     if 'resnet18' == args.net:
         model = timm.create_model(args.net, pretrained=False, num_classes=num_classes)
         model.conv1 = torch.nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         model.maxpool = torch.nn.MaxPool2d(kernel_size=1, stride=1, padding=0)       
-    if 'resnet18_order' == args.net:
-        import resnet_order
-        model = resnet_order.resnet18(num_classes=num_classes)  
     model.to(device)
     
     criterion = torch.nn.CrossEntropyLoss()
-    # torch.save(model.state_dict(), save_path + '/start.pth.tar')
-    state_dict = torch.load(config['save_path']+'/resnet18_baseline/last.pth.tar', map_location = device)['state_dict']
-    model.load_state_dict(state_dict)
     model.eval()
     print(utils.validation_accuracy(model, valid_loader, device))
     
-    optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = wd)
+    optimizer = torch.optim.SGD(model.parameters(), lr = 0.1, momentum=0.9, weight_decay = wd)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2)   
@@ -73,21 +66,13 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
-        for batch_idx, (inputs, input_jigsaw, input_blur, targets) in enumerate(train_loader):
-            inputs, input_jigsaw, input_blur, targets = inputs.to(device), input_jigsaw.to(device), input_blur.to(device), targets.to(device)
+        for batch_idx, (inputs, targets) in enumerate(train_loader):
+            inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
-
-            inputs = torch.cat([inputs, input_jigsaw], dim=0)
             
-            x = model.forward_features(inputs)            
-            features = model.global_pool(x).view(-1, 512)
+            outputs = model(inputs)     
             
-            outputs = model.fc(features)
-            
-            loss = criterion(outputs[:len(targets)], targets)
-            # loss += torch.norm(x[len(targets):], dim=[2,3], p=2).mean()
-            loss += 0.5 * -(outputs[len(targets):].mean(1) - torch.logsumexp(outputs[len(targets):], dim=1)).mean()
-
+            loss = criterion(outputs, targets)
             loss.backward()            
             optimizer.step()
 
