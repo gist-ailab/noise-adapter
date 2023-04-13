@@ -5,9 +5,6 @@ import timm
 import argparse
 
 from utils import *
-from evaluation import *
-import resnet_sigmoid
-import resnet_scale
 
 
 import torch
@@ -33,7 +30,7 @@ def eval():
     num_classes = int(config['num_classes'])
 
     if 'cifar' in args.data:
-        _, valid_loader = get_cifar(args.data, dataset_path, batch_size)
+        _, valid_loader = get_cifar_noisy(args.data, dataset_path, batch_size, 0.0)
     else:
         valid_loader = get_svhn(dataset_path, batch_size)
         
@@ -50,54 +47,9 @@ def eval():
     model.to(device)
     model.eval()
 
-    if args.method == 'msp':
-        calculate_score = calculate_msp
-    if args.method == 'odin':
-        calculate_score = calculate_odin
-    if args.method == 'norm':
-        calculate_score = calculate_norm
-    if args.method == 'allnm':
-        calculate_score = calculate_allnm
-    if args.method == 'cosine':
-        calculate_score = calculate_cosine
-    if args.method == 'energy':
-        calculate_score = calculate_energy
-    if args.method == 'gradnm':
-        calculate_score = calculate_gradnorm
-    if args.method == 'react':
-        calculate_score = calculate_react
-    if args.method == 'md':
-        calculate_score = calculate_mdscore
-    if args.method == 'godn':
-        calculate_score = calculate_godin
-    if args.method == 'mls':
-        calculate_score = calculate_mls
-    if args.method == 'dice':
-        calculate_score = calculate_msp
-    f = open(save_path+'/{}_result.txt'.format(args.method), 'w')
     valid_accuracy = validation_accuracy(model, valid_loader, device)
     print('In-distribution accuracy: ', valid_accuracy)
-        
-    f.write('Accuracy for ValidationSet: {}\n'.format(str(valid_accuracy)))
-    #MSP
-    #image_norm(valid_loader)  
-    preds_in = calculate_score(model, valid_loader, device).cpu()
-    if 'cifar' in args.data:
-        OOD_results(preds_in, model, get_svhn('/SSDe/yyg/data/svhn', batch_size), device, args.method+'-SVHN', f)
-    else:
-        _, cifar_loader = get_cifar('cifar10', '/SSDe/yyg/data/cifar10', batch_size)
-        OOD_results(preds_in, model, cifar_loader, device, args.method+'-CIFAR10', f)     
 
-  
-    OOD_results(preds_in, model, get_textures('/SSDe/yyg/data/ood-set/textures/images'), device, args.method+'-TEXTURES', f)
-    OOD_results(preds_in, model, get_lsun('/SSDe/yyg/data/ood-set/LSUN'), device, args.method+'-LSUN', f)
-    OOD_results(preds_in, model, get_lsun('/SSDe/yyg/data/ood-set/LSUN_resize'), device, args.method+'-LSUN-resize', f)
-    OOD_results(preds_in, model, get_lsun('/SSDe/yyg/data/ood-set/iSUN'), device, args.method+'-iSUN', f)
-    OOD_results(preds_in, model, get_places('/SSDd/yyg/data/places256'), device, args.method+'-Places365', f)
-    
-    cifar = 'cifar100' if args.data == 'cifar10' else 'cifar10'
-    OOD_results(preds_in, model, get_cifar(cifar, '/SSDe/yyg/data/{}'.format(cifar), batch_size)[1], device, args.method+'-{}'.format(cifar), f)
-    f.close()
 
 
 if __name__ =='__main__':

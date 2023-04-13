@@ -1,7 +1,0 @@
-{
-    "epoch" : "100",
-    "id_dataset" : "/SSDe/yyg/data/svhn",
-    "batch_size" : 128,
-    "save_path" : "/SSDe/yyg/NA/twomoon/",
-    "num_classes" : 2
-}
