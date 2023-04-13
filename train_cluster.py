@@ -29,7 +29,18 @@ class RKdAngle(nn.Module):
         loss = F.smooth_l1_loss(s_angle, t_angle, reduction='elementwise_mean')
         return loss
 
+def forward_embeddings(teacher, loader, device):
+    embeddings = []
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(train_loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            
+            features_t = teacher.forward_features(inputs)
+            features_t = teacher.global_pool(features_t).view(-1, 512)
 
+            embeddings.append(features_t)
+    embeddings = torch.cat(embeddings, dim=0)
+    return embeddings
 
 
 def train():
@@ -71,6 +82,8 @@ def train():
     teacher.to(device)
     teacher.eval()
 
+    embeddings = forward_embeddings()
+
     model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
     model.to(device)
     
@@ -97,10 +110,6 @@ def train():
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             
-            with torch.no_grad():
-                features_t = teacher.forward_features(inputs)
-                features_t = teacher.global_pool(features_t).view(-1, 512) # ResNet18
-
             features_s = model.forward_features(inputs)     
             features_s = model.global_pool(features_s).view(-1, 512)
 
