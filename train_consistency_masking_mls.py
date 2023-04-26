@@ -60,12 +60,13 @@ def train():
         train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
     elif 'clothing1m' in args.data:
         train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
-
+    elif 'animal10n' in args.data:
+        train_loader, valid_loader = utils.get_animal10n(dataset_path, batch_size)
     print(args.net)
 
     if args.net == 'resnet18':
         model = models.ResNet18(num_classes=1000)
-        model.load_state_dict(torch.load('/SSDe/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
+        model.load_state_dict(torch.load('/SSDb/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
         model.fc = torch.nn.Linear(512, num_classes)
     else:
         model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
@@ -99,7 +100,7 @@ def train():
     for epoch in range(max_epoch):
         ## training
         model.train()
-        ema_model.train()
+        ema_model.eval()
         total_loss = 0
         total = 0
         correct = 0
@@ -143,7 +144,7 @@ def train():
         saver.save_checkpoint(epoch, metric = valid_accuracy)
         ema_accuracy = utils.validation_accuracy(ema_model.module, train_loader, device)
         
-        if ema_accuracy < (train_accuracy + 0.001) and ema_accuracy > (train_accuracy - 0.001) and not check:
+        if ema_accuracy > train_accuracy and not check:
             check = True
 
         print(ema_accuracy, train_accuracy, check)
