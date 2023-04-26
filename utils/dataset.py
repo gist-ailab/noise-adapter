@@ -134,13 +134,13 @@ class cifar100Nosiy(torchvision.datasets.CIFAR100):
                 # print("Noisy class %s, has %s samples." % (i, n_noisy))
             return
 
-def get_cifar_noisy(dataset, folder, batch_size, noisy_rate=0.2):
+def get_cifar_noisy(dataset, folder, batch_size, noisy_rate=0.2, asym=False):
     if dataset == 'cifar10':
-        noisy_data = cifar10Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate)
+        noisy_data = cifar10Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate, asym=asym)
         test_data = dset.CIFAR10(folder, train=False, transform=test_transform_cifar, download=True)
         num_classes = 10
     if dataset == 'cifar100':
-        noisy_data = cifar100Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate)
+        noisy_data = cifar100Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate, asym=asym)
         test_data = dset.CIFAR100(folder, train=False, transform=test_transform_cifar, download=True)
         num_classes = 100
     train_loader = torch.utils.data.DataLoader(noisy_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
