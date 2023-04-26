@@ -1,15 +1,18 @@
 import os
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import argparse
 import timm
 import numpy as np
 import utils
 
-import random
-random.seed(0)
-np.random.seed(0)
+from kmeans_pytorch import kmeans
 
 
+def softmax_entropy(x, x_ema):# -> torch.Tensor:
+    """Entropy of softmax distribution from logits."""
+    return -(x_ema.softmax(1) * x.log_softmax(1)).sum(1)
 
 def train():
     parser = argparse.ArgumentParser()
@@ -44,13 +47,12 @@ def train():
     
     if 'cifar' in args.data:
         train_loader, valid_loader = utils.get_cifar_noisy(args.data, dataset_path, batch_size, args.nr)
-    elif 'food101n' in args.data:
-        train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
-    elif 'clothing1m' in args.data:
-        train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
+    print(args.net)
 
     model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
     model.to(device)
+
+    ema_model = timm.utils.ModelEmaV2(model, decay = 0.999, device = device)
     
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
@@ -64,6 +66,7 @@ def train():
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2)   
     print(train_loader.dataset[0][0].shape)
+    ce_lambda = 1.0
     for epoch in range(max_epoch):
         ## training
         model.train()
@@ -73,13 +76,19 @@ def train():
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
+
+            outputs = model(inputs)
+
+            outputs_ema = ema_model.module(inputs)
             
-            outputs = model(inputs)     
+            ce_loss = criterion(outputs, targets)
+            consistency_loss = softmax_entropy(outputs, outputs_ema).mean(0)
             
-            loss = criterion(outputs, targets)
+            loss = ce_lambda * ce_loss + consistency_loss
             loss.backward()            
             optimizer.step()
 
+            ema_model.update(model)
             total_loss += loss
             total += targets.size(0)
             _, predicted = outputs[:len(targets)].max(1)            
@@ -91,7 +100,6 @@ def train():
         print()
 
         ## validation
-        model.eval()
         total_loss = 0
         total = 0
         correct = 0
@@ -99,6 +107,13 @@ def train():
         scheduler.step()
 
         saver.save_checkpoint(epoch, metric = valid_accuracy)
+        # print(utils.validation_accuracy(ema_model.module, train_loader, device), utils.validation_accuracy(ema_model.module, valid_loader, device))
+        ema_accuracy = utils.validation_accuracy(ema_model.module, train_loader, device)
+        if ema_accuracy < (train_accuracy + 0.002) and ema_accuracy > (train_accuracy - 0.002):
+            ce_lambda = 0.0
+            
+        print(ema_accuracy, train_accuracy, ce_lambda)
+        print(utils.validation_accuracy(ema_model.module, valid_loader, device))
         print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy))
         print(scheduler.get_last_lr())
 if __name__ =='__main__':

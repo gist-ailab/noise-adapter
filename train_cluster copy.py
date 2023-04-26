@@ -1,14 +1,48 @@
 import os
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import argparse
 import timm
 import numpy as np
 import utils
 
+from kmeans_pytorch import kmeans
 import random
 random.seed(0)
 np.random.seed(0)
 
+
+class RKdAngle(nn.Module):
+    def forward(self, student, teacher):
+        # N x C
+        # N x N x C
+
+        with torch.no_grad():
+            td = (teacher.unsqueeze(0) - teacher.unsqueeze(1))
+            norm_td = F.normalize(td, p=2, dim=2)
+            t_angle = torch.bmm(norm_td, norm_td.transpose(1, 2)).view(-1)
+
+        sd = (student.unsqueeze(0) - student.unsqueeze(1))
+        norm_sd = F.normalize(sd, p=2, dim=2)
+        s_angle = torch.bmm(norm_sd, norm_sd.transpose(1, 2)).view(-1)
+
+        loss = F.smooth_l1_loss(s_angle, t_angle, reduction='elementwise_mean')
+        return loss
+
+def forward_embeddings(teacher, loader, device):
+    embeddings = []
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            
+            features_t = teacher.forward_features(inputs)
+            features_t = teacher.global_pool(features_t).view(-1, 512)
+            features_t = features_t / torch.norm(features_t, dim=1, keepdim=True)
+
+            embeddings.append(features_t)
+    embeddings = torch.cat(embeddings, dim=0)
+    return embeddings
 
 
 def train():
@@ -44,15 +78,24 @@ def train():
     
     if 'cifar' in args.data:
         train_loader, valid_loader = utils.get_cifar_noisy(args.data, dataset_path, batch_size, args.nr)
-    elif 'food101n' in args.data:
-        train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
-    elif 'clothing1m' in args.data:
-        train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
+    print(args.net)
+
+    teacher = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
+    teacher.to(device)
+    teacher.eval()
+
+    embeddings = forward_embeddings(teacher, train_loader, device)
+    cluster_ids, cluster_centers = kmeans(X=embeddings, num_clusters = num_classes, distance='euclidean', device= device)
+    print(cluster_centers.shape)
+    print(cluster_ids)
+
+    train_loader = utils.modify_train_loader_with_cluster(train_loader, cluster_ids, cluster_centers)
 
     model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
     model.to(device)
     
     criterion = torch.nn.CrossEntropyLoss()
+    cos = torch.nn.CosineSimilarity()
     model.eval()
     print(utils.validation_accuracy(model, valid_loader, device))
     
@@ -70,13 +113,19 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
-        for batch_idx, (inputs, targets) in enumerate(train_loader):
-            inputs, targets = inputs.to(device), targets.to(device)
+        for batch_idx, (inputs, targets, cluster_ids, cluster_centers) in enumerate(train_loader):
+            inputs, targets, cluster_ids, cluster_centers = inputs.to(device), targets.to(device), cluster_ids.to(device), cluster_centers.to(device)
             optimizer.zero_grad()
-            
-            outputs = model(inputs)     
-            
-            loss = criterion(outputs, targets)
+
+            features_s = model.forward_features(inputs)     
+            features_s = model.global_pool(features_s).view(-1, 512)
+
+            outputs = model.fc(features_s)
+
+            ce_loss = criterion(outputs, targets)
+            cluster_loss = -cos(features_s, cluster_centers).mean()
+
+            loss = ce_loss + cluster_loss
             loss.backward()            
             optimizer.step()
 

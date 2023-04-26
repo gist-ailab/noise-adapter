@@ -4,16 +4,15 @@ import argparse
 import timm
 import numpy as np
 import utils
-
+import models
 import random
 random.seed(0)
 np.random.seed(0)
 
 
-
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--net','-n', default = 'vit_tiny_patch16_224', type=str)
+    parser.add_argument('--net','-n', default = 'resnet18', type=str)
     parser.add_argument('--data', '-d', type=str)
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -31,7 +30,7 @@ def train():
 
     batch_size = int(config['batch_size'])
     max_epoch = int(config['epoch'])
-    lrde = [50, 75]
+    lrde = [50, 75, 90]
 
     print(model_name, dataset_path.split('/')[-2], batch_size, class_range)
     
@@ -42,25 +41,18 @@ def train():
     else:
         raise ValueError('save_path already exists')
     
-    if 'cifar' in args.data:
-        train_loader, valid_loader = utils.get_cifar_noisy(args.data, dataset_path, batch_size, args.nr)
-    elif 'food101n' in args.data:
-        train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
-    elif 'clothing1m' in args.data:
-        train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
+    train_loader, valid_loader = utils.get_downsampled_imagenet('/SSDe/yyg/data/imagenet32', batch_size)
+    print(args.net)
 
-    model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
+    # model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)
+    model = models.ResNet18(1000)
     model.to(device)
     
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
     print(utils.validation_accuracy(model, valid_loader, device))
     
-    if 'vit' in args.net:
-        optimizer = torch.optim.SGD(model.parameters(), lr = 0.003, momentum=0.9, weight_decay = 1e-04)
-    else:
-        optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-04)
-
+    optimizer = torch.optim.SGD(model.parameters(), lr = 0.1, momentum=0.9, weight_decay = 1e-04)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2)   
     print(train_loader.dataset[0][0].shape)

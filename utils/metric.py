@@ -7,6 +7,24 @@ import torch.nn.functional as F
 
 recall_level_default = 0.95
 
+def validation_accuracy_cluster(model, loader, device):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets, cluster_ids, cluster_centers) in enumerate(loader):
+            inputs, targets, cluster_ids, cluster_centers = inputs.to(device), targets.to(device), cluster_ids.to(device), cluster_centers.to(device)
+
+            outputs = model(inputs)
+            #print(outputs.shape)
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
+
+
 def validation_accuracy(model, loader, device):
     total = 0
     correct = 0

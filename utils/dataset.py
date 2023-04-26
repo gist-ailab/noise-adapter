@@ -11,15 +11,22 @@ from torchvision import transforms
 from torchvision import datasets as dset
 import torchvision
 
-mean = [x / 255 for x in [125.3, 123.0, 113.9]]
-std = [x / 255 for x in [63.0, 62.1, 66.7]]
+# mean = (0.485, 0.456, 0.406)
+# std = (0.229, 0.224, 0.225)
+# cifar10_normalize =  transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+cifar10_normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+imagenet_normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
-size = 224
+size = 32
 
 # , transforms.Normalize(mean, std)
 train_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.RandomHorizontalFlip(), transforms.RandomCrop(size, padding=4),
-                               transforms.ToTensor(), transforms.Normalize(mean, std)])
-test_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.ToTensor(), transforms.Normalize(mean, std)])#, )
+                               transforms.ToTensor(), cifar10_normalize])
+test_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.ToTensor(), cifar10_normalize])#, )
+
+
+train_transform = transforms.Compose([transforms.Resize([224,224]), transforms.RandomHorizontalFlip(), transforms.ToTensor(), imagenet_normalize])
+test_transform = transforms.Compose([transforms.Resize([224,224]), transforms.ToTensor(), imagenet_normalize])
 
 
 def read_conf(json_path):
@@ -138,28 +145,63 @@ def get_cifar_noisy(dataset, folder, batch_size, noisy_rate=0.2):
         num_classes = 100
     train_loader = torch.utils.data.DataLoader(noisy_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
     valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
-    
     return train_loader, valid_loader
 
-def get_cifar_noisy_and_noisier(dataset, folder, batch_size, noisy_rate=0.2, noisier_rate=0.2):
-    if dataset == 'cifar10':
-        print('noisy')
-        noisy_data = cifar10Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate)
-        print('noiser')
-        noisier_data = cifar10Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisier_rate)
-        test_data = dset.CIFAR10(folder, train=False, transform=test_transform_cifar, download=True)
-        num_classes = 10
-    if dataset == 'cifar100':
-        print('noisy')
-        noisy_data = cifar100Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate)
-        print('noiser')
-        noisier_data = cifar100Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisier_rate)
-        test_data = dset.CIFAR100(folder, train=False, transform=test_transform_cifar, download=True)
-        num_classes = 100
-    train_loader = torch.utils.data.DataLoader(noisy_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
-    train2_loader = torch.utils.data.DataLoader(noisier_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
-    valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
-    return train_loader, train2_loader, valid_loader
+def modify_train_loader_with_cluster(train_loader, cluster_ids, cluster_centers):
+    curr_dataset = train_loader.dataset
+    batch_size = train_loader.batch_size
+
+    class dataset_w_cluster():
+        def __init__(self, dataset, cluster_ids, cluster_centers) -> None:
+            self.dataset = dataset
+            self.cluster_ids = cluster_ids
+            self.cluster_centers = cluster_centers
+
+        def __len__(self):
+            return len(self.dataset)
+        
+        def __getitem__(self, idx):
+            x, y = self.dataset[idx]
+            cluster_id = self.cluster_ids[idx]
+            cluster_center = self.cluster_centers[cluster_id]
+
+            return x, y, cluster_id, cluster_center
+
+    cluster_dataset = dataset_w_cluster(curr_dataset, cluster_ids, cluster_centers)
+    train_loader = torch.utils.data.DataLoader(cluster_dataset, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
+    return train_loader
+
+def get_downsampled_imagenet(folder, batch_size):
+    from PIL import PngImagePlugin
+    Image.MAX_IMAGE_PIXELS = None
+    PngImagePlugin.MAX_TEXT_CHUNK = 1000 * (1024**2)
+    train_data = dset.ImageFolder(os.path.join(folder, 'train'), train_transform_cifar)
+    val_data = dset.ImageFolder(os.path.join(folder, 'val'), test_transform_cifar)
+
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
+    valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    return train_loader, valid_loader
+
+def get_food101n(folder, batch_size):
+    train_data = dset.ImageFolder(os.path.join(folder, 'images'), transform = train_transform)
+    val_data = dset.Food101(os.path.join(folder, 'val'), split = 'test', transform = test_transform, download=True)
+
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
+    valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    return train_loader, valid_loader
+
+def get_clothing1m(folder, batch_size):
+    train_data1 = dset.ImageFolder(os.path.join(folder, 'noisy_train'), transform = train_transform)
+    train_data2 = dset.ImageFolder(os.path.join(folder, 'clean_train'), transform = train_transform)
+
+    train_data1.samples.extend(train_data2.samples)
+
+    val_data = dset.ImageFolder(os.path.join(folder, 'clean_test'), transform = train_transform)
+
+    train_loader = torch.utils.data.DataLoader(train_data1, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
+    valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    return train_loader, valid_loader
 
 if __name__ == '__main__':
-    pass
+    # get_food101n('/SSDe/yyg/data/Food-101N_release', 2)
+    get_clothing1m('/SSDe/yyg/data/Clothing1M', 2)
