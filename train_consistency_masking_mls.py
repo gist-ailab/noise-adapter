@@ -30,7 +30,7 @@ def train():
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--save_path', '-s', type=str)
     parser.add_argument('--nr', default = 0.2, type=float)
-
+    parser.add_argument('--asym', action='store_true')
     args = parser.parse_args()
     config = utils.read_conf('conf/'+args.data+'.json')
     device = 'cuda:'+args.gpu
@@ -43,7 +43,7 @@ def train():
 
     batch_size = int(config['batch_size'])
     max_epoch = int(config['epoch'])
-    lrde = [50, 75]
+    
 
     print(model_name, dataset_path.split('/')[-2], batch_size, class_range)
     
@@ -55,13 +55,17 @@ def train():
         raise ValueError('save_path already exists')
     
     if 'cifar' in args.data:
-        train_loader, valid_loader = utils.get_cifar_noisy(args.data, dataset_path, batch_size, args.nr)
+        print('asym:', args.asym)
+        train_loader, valid_loader = utils.get_cifar_noisy(args.data, dataset_path, batch_size, args.nr, args.asym)
+        lrde = [50, 75]
     elif 'food101n' in args.data:
         train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
     elif 'clothing1m' in args.data:
         train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
+        lrde = [40]
     elif 'animal10n' in args.data:
         train_loader, valid_loader = utils.get_animal10n(dataset_path, batch_size)
+
     print(args.net)
 
     if args.net == 'resnet18':
@@ -84,11 +88,16 @@ def train():
     print(utils.validation_accuracy(model, valid_loader, device))
 
     if 'vit' in args.net:
-        optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-04)
+        optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-03)
     elif 'resnet34' in args.net:
         optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
     else:
-        optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-04)
+        if args.data == 'clothing1m':
+            lr = 0.002
+        else:
+            lr = 0.001
+        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 1e-04)
+            
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2)   
