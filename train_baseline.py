@@ -19,6 +19,7 @@ def train():
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--save_path', '-s', type=str)
     parser.add_argument('--nr', default = 0.2, type=float)
+    parser.add_argument('--asym', action='store_true')
 
     args = parser.parse_args()
     config = utils.read_conf('conf/'+args.data+'.json')
@@ -44,11 +45,14 @@ def train():
         raise ValueError('save_path already exists')
     
     if 'cifar' in args.data:
-        train_loader, valid_loader = utils.get_cifar_noisy(args.data, dataset_path, batch_size, args.nr)
+        print('asym:', args.asym)
+        train_loader, valid_loader = utils.get_cifar_noisy(args.data, dataset_path, batch_size, args.nr, args.asym)
+        lrde = [50, 75]
     elif 'food101n' in args.data:
         train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
     elif 'clothing1m' in args.data:
         train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
+        lrde=[40]
     elif 'animal10n' in args.data:
         train_loader, valid_loader = utils.get_animal10n(dataset_path, batch_size)
 
