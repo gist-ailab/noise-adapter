@@ -124,7 +124,6 @@ def train():
                 consistency_loss = entropy(outputs)[pseudo_label_ema != targets]
                 # print(ce_loss.shape, consistency_loss.shape)
                 loss = ce_loss.mean() + consistency_loss.mean()
-
             else:
                 ce_loss = criterion(outputs, targets)
                 consistency_loss = softmax_entropy(outputs, outputs_ema).mean()

@@ -1,7 +1,7 @@
 {
     "epoch" : "100",
-    "id_dataset" : "/SSDb/yyg/data/animal10n",
+    "id_dataset" : "/SSDe/yyg/data/animal10n",
     "batch_size" : 128,
-    "save_path" : "/SSDb/yyg/RR/Animal10N/",
+    "save_path" : "/SSDe/yyg/RR/Animal10N/",
     "num_classes" : 10
 }
