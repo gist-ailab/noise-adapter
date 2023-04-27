@@ -123,7 +123,7 @@ def train():
                 ce_loss = criterion_noreduction(outputs, pseudo_label_ema)[pseudo_label_ema == targets]
                 consistency_loss = entropy(outputs)[pseudo_label_ema != targets]
                 # print(ce_loss.shape, consistency_loss.shape)
-                loss = ce_loss + consistency_loss
+                loss = ce_loss.mean() + consistency_loss.mean()
 
             else:
                 ce_loss = criterion(outputs, targets)
