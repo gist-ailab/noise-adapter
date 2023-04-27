@@ -75,7 +75,7 @@ def train():
             lr = 0.002
         else:
             lr = 0.001
-        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 1e-04)
+        optimizer = torch.optim.SGD(model.fc.parameters(), lr = lr, momentum=0.9, weight_decay = 1e-04)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2)   
