@@ -63,12 +63,14 @@ def train():
     elif 'clothing1m' in args.data:
         train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
         lrde = [40]
+    elif 'animal10n' in args.data:
+        train_loader, valid_loader = utils.get_animal10n(dataset_path, batch_size)
 
     print(args.net)
 
     if args.net == 'resnet18':
         model = models.ResNet18(num_classes=1000)
-        model.load_state_dict(torch.load('/SSDe/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
+        model.load_state_dict(torch.load('/SSDb/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
         model.fc = torch.nn.Linear(512, num_classes)
     else:
         model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  

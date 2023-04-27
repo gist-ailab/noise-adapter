@@ -5,6 +5,7 @@ import timm
 import numpy as np
 import utils
 
+import models
 import random
 random.seed(0)
 np.random.seed(0)
@@ -48,8 +49,15 @@ def train():
         train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
     elif 'clothing1m' in args.data:
         train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
+    elif 'animal10n' in args.data:
+        train_loader, valid_loader = utils.get_animal10n(dataset_path, batch_size)
 
-    model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
+    if args.net == 'resnet18':
+        model = models.ResNet18(num_classes=1000)
+        model.load_state_dict(torch.load('/SSDb/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
+        model.fc = torch.nn.Linear(512, num_classes)
+    else:
+        model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
     model.to(device)
     
     criterion = torch.nn.CrossEntropyLoss()

@@ -54,10 +54,10 @@ def other_class(n_classes, current_class):
     return other_class
 
 class cifar10Nosiy(torchvision.datasets.CIFAR10):
-    def __init__(self, root, train=True, transform=None, target_transform=None, download=False, nosiy_rate=0.0, asym=False):
+    def __init__(self, root, train=True, transform=None, target_transform=None, download=True, nosiy_rate=0.0, asym=False):
         np.random.seed(0)
         # print(np.random.randn(5))
-        super(cifar10Nosiy, self).__init__(root, transform=transform, target_transform=target_transform)
+        super(cifar10Nosiy, self).__init__(root, transform=transform, target_transform=target_transform, download=True)
         if asym:
             # automobile < - truck, bird -> airplane, cat <-> dog, deer -> horse
             source_class = [9, 2, 3, 5, 4]
@@ -196,12 +196,36 @@ def get_clothing1m(folder, batch_size):
 
     train_data1.samples.extend(train_data2.samples)
 
-    val_data = dset.ImageFolder(os.path.join(folder, 'clean_test'), transform = train_transform)
+    val_data = dset.ImageFolder(os.path.join(folder, 'clean_test'), transform = test_transform)
 
     train_loader = torch.utils.data.DataLoader(train_data1, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
     valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
     return train_loader, valid_loader
 
+def get_animal10n(folder, batch_size):
+    train_data = dset.ImageFolder(os.path.join(folder), transform = train_transform_cifar)
+    val_data = dset.ImageFolder(os.path.join(folder), transform = test_transform_cifar)
+
+    new_samples = []
+    for sample in train_data.samples:
+        sample_wd = sample[0].split('/')
+        if sample_wd[-2] == 'training':
+            new_samples.append([sample[0], int(sample_wd[-1][0])])
+    train_data.samples = new_samples
+
+    new_samples = []
+    for sample in val_data.samples:
+        sample_wd = sample[0].split('/')
+        if sample_wd[-2] == 'testing':
+            new_samples.append([sample[0], int(sample_wd[-1][0])])
+    val_data.samples = new_samples
+
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
+    valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    return train_loader, valid_loader
+
 if __name__ == '__main__':
     # get_food101n('/SSDe/yyg/data/Food-101N_release', 2)
-    get_clothing1m('/SSDe/yyg/data/Clothing1M', 2)
+    # get_clothing1m('/SSDe/yyg/data/Clothing1M', 2)
+    get_animal10n('/SSDb/yyg/data/animal10n', 2)
+
