@@ -60,11 +60,13 @@ def train():
         lrde = [50, 75]
     elif 'food101n' in args.data:
         train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
+        lrde = [50, 75]
     elif 'clothing1m' in args.data:
         train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
         lrde = [40]
     elif 'animal10n' in args.data:
         train_loader, valid_loader = utils.get_animal10n(dataset_path, batch_size)
+        lrde = [50, 75]
 
     print(args.net)
 
@@ -76,7 +78,7 @@ def train():
         model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
     model.to(device)
 
-    train_adaptation(model, train_loader, 5, device)
+    # train_adaptation(model, train_loader, 5, device)
 
     ema_model = timm.utils.ModelEmaV2(model, decay = 0.99999, device = device)
     
