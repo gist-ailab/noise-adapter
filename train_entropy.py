@@ -76,7 +76,7 @@ def train():
 
     train_adaptation(model, train_loader, 5, device)
 
-    ema_model = timm.utils.ModelEmaV2(model, decay = 0.99999, device = device)
+    ema_model = timm.utils.ModelEmaV2(model, decay = 0.999, device = device)
     
 
     criterion = torch.nn.CrossEntropyLoss()
@@ -120,13 +120,15 @@ def train():
             
             if check:
                 pseudo_label_ema = outputs_ema.max(dim=1).indices
-                ce_loss = criterion(outputs, pseudo_label_ema)
-                consistency_loss = entropy(outputs).mean(0)
+                ce_loss = criterion_noreduction(outputs, pseudo_label_ema)[pseudo_label_ema == targets]
+                consistency_loss = entropy(outputs)[pseudo_label_ema != targets]
+                # print(ce_loss.shape, consistency_loss.shape)
+                loss = ce_loss + consistency_loss
+
             else:
                 ce_loss = criterion(outputs, targets)
                 consistency_loss = softmax_entropy(outputs, outputs_ema).mean()
-            
-            loss = ce_loss + consistency_loss
+                loss = ce_loss + consistency_loss
             loss.backward()            
             optimizer.step()
 
