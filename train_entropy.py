@@ -60,6 +60,7 @@ def train():
         lrde = [50, 75]
     elif 'food101n' in args.data:
         train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
+        lrde = [50, 75]
     elif 'clothing1m' in args.data:
         train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
         lrde = [40]
@@ -88,7 +89,7 @@ def train():
     if 'vit' in args.net:
         optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-03)
     elif 'resnet34' in args.net:
-        optimizer = torch.optim.Adam(model.parameters(), lr = 0.001)
+        optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-03)
     else:
         if args.data == 'clothing1m':
             lr = 0.002

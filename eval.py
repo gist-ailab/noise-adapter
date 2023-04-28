@@ -11,6 +11,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+import models
+
 def eval():
     parser = argparse.ArgumentParser()
     parser.add_argument('--net','-n', default = 'resnet18', type=str)
@@ -34,14 +36,13 @@ def eval():
     else:
         valid_loader = get_svhn(dataset_path, batch_size)
         
-    if 'resnet18' == args.net:
-        model = timm.create_model(args.net, pretrained=False, num_classes=num_classes)
-        model.conv1 = torch.nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        model.maxpool = torch.nn.MaxPool2d(kernel_size=1, stride=1, padding=0)
+    if args.net == 'resnet18':
+        model = models.ResNet18(num_classes=num_classes)
         
     if 'wrn40' == args.net:
         import wrn
         model = wrn.WideResNet(40, num_classes, 2, 0.3)
+        
     state_dict = (torch.load(save_path+'/last.pth.tar', map_location = device)['state_dict'])    
     model.load_state_dict(state_dict)
     model.to(device)
