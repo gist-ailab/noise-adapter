@@ -69,7 +69,7 @@ def train():
 
     if args.net == 'resnet18':
         model = models.ResNet18(num_classes=1000)
-        model.load_state_dict(torch.load('/SSDb/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
+        model.load_state_dict(torch.load('/SSDe/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
         model.fc = torch.nn.Linear(512, num_classes)
     else:
         model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
@@ -77,7 +77,7 @@ def train():
 
     train_adaptation(model, train_loader, 5, device)
 
-    ema_model = timm.utils.ModelEmaV2(model, decay = 0.9999, device = device)
+    ema_model = timm.utils.ModelEmaV2(model, decay = 0.999, device = device)
     
 
     criterion = torch.nn.CrossEntropyLoss()
@@ -122,9 +122,9 @@ def train():
             if check:
                 pseudo_label_ema = outputs_ema.max(dim=1).indices
                 ce_loss = criterion_noreduction(outputs, pseudo_label_ema)[pseudo_label_ema == targets]
-                consistency_loss = entropy(outputs)[pseudo_label_ema != targets]
+                # consistency_loss = entropy(outputs)[pseudo_label_ema != targets]
                 # print(ce_loss.shape, consistency_loss.shape)
-                loss = ce_loss.mean() + consistency_loss.mean()
+                loss = ce_loss.mean() #+ consistency_loss.mean()
             else:
                 ce_loss = criterion(outputs, targets)
                 consistency_loss = softmax_entropy(outputs, outputs_ema).mean()
