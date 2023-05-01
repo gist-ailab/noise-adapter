@@ -32,7 +32,7 @@ def eval():
     num_classes = int(config['num_classes'])
 
     if 'cifar' in args.data:
-        _, valid_loader = get_cifar_noisy(args.data, dataset_path, batch_size, 0.0)
+        train_loader, valid_loader = get_cifar_noisy(args.data, dataset_path, batch_size, 0.0)
     else:
         valid_loader = get_svhn(dataset_path, batch_size)
         
@@ -47,6 +47,9 @@ def eval():
     model.load_state_dict(state_dict)
     model.to(device)
     model.eval()
+
+    train_accuracy = validation_accuracy(model, train_loader, device)
+    print('In-distribution accuracy: ', train_accuracy)
 
     valid_accuracy = validation_accuracy(model, valid_loader, device)
     print('In-distribution accuracy: ', valid_accuracy)
