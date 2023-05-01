@@ -83,7 +83,6 @@ def train():
         model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
     
     model.to(device)
-
     # train_adaptation(model, train_loader, 5, device)
 
     ema_model = timm.utils.ModelEmaV2(model, decay = 0.999, device = device)
@@ -122,6 +121,8 @@ def train():
         total = 0
         correct = 0
         for batch_idx, (inputs, targets) in enumerate(train_loader):
+            if batch_idx == 2000:
+                continue
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
 
