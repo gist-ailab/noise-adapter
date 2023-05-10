@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import argparse
 import timm
 import numpy as np
-import clip
 
 import utils
 import models
@@ -64,7 +63,7 @@ def train():
         lrde = [50, 75]
     elif 'clothing1m' in args.data:
         train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
-        lrde = [40]
+        lrde = [30]
     elif 'animal10n' in args.data:
         train_loader, valid_loader = utils.get_animal10n(dataset_path, batch_size)
         lrde = [50, 75]
@@ -75,8 +74,8 @@ def train():
         model.load_state_dict(torch.load('/SSDe/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
         model.fc = torch.nn.Linear(512, num_classes)
     elif args.net == 'resnet50':
-        model = timm.create_model(args.net, pretrained=False, num_classes=num_classes)  
-        model.load_state_dict(torch.load('/SSDe/yyg/RR/dino_resnet50_pretrain.pth', map_location=device), strict=False)
+        model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
+        # model.load_state_dict(torch.load('/SSDe/yyg/RR/dino_resnet50_pretrain.pth', map_location=device), strict=False)
         model.fc = torch.nn.Linear(2048, num_classes)
 
     else:
@@ -100,10 +99,10 @@ def train():
         optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-03)
     else:
         if args.data == 'clothing1m':
-            lr = 0.002
+            lr = 0.001
         else:
             lr = 0.001
-        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 1e-04)
+        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 1e-03)
             
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
@@ -113,7 +112,7 @@ def train():
     f = open(save_path + '/record.txt', 'w')
     ce_lambda = 1.0
     check = False
-    for epoch in range(max_epoch):
+    for epoch in range(60):
         ## training
         model.train()
         ema_model.eval()
@@ -122,12 +121,13 @@ def train():
         correct = 0
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             if batch_idx == 2000:
-                continue
+                break
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
 
             outputs = model(inputs)
-            outputs_ema = ema_model.module(inputs)
+            with torch.no_grad():
+                outputs_ema = ema_model.module(inputs)
             
             if check:
                 pseudo_label_ema = outputs_ema.max(dim=1).indices
