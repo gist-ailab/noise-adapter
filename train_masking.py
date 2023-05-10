@@ -22,6 +22,17 @@ def train_adaptation(model, train_loader, epochs, device):
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
+
+def masking_image(x, ratio):
+    x_ = x.clone()
+    B, _, H, W = x.shape
+
+    mshape = B, 1, round(H / 4), round(W / 4)
+    input_mask = torch.rand(mshape, device=x_.device)
+    input_mask = (input_mask > ratio).float()
+    input_mask = F.interpolate(input_mask, scale_factor=4, mode='nearest')
+    masked_x = x_ * input_mask
+    return masked_x
             
 def train():
     parser = argparse.ArgumentParser()
@@ -70,21 +81,22 @@ def train():
     print(args.net)
 
     if args.net == 'resnet18':
-        model = models.ResNet18(num_classes=1000)
-        model.load_state_dict(torch.load('/SSDe/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
-        model.fc = torch.nn.Linear(512, num_classes)
+        model = models.ResNet18(num_classes=num_classes)
+        # model.load_state_dict(torch.load('/SSDe/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
+        # model.fc = torch.nn.Linear(512, num_classes)
     elif args.net == 'resnet50':
-        model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
-        # model.load_state_dict(torch.load('/SSDe/yyg/RR/dino_resnet50_pretrain.pth', map_location=device), strict=False) 
-        # model.fc = torch.nn.Linear(2048, num_classes)
+        model = timm.create_model(args.net, pretrained=False, num_classes=num_classes)  
+        model.load_state_dict(torch.load('/SSDe/yyg/RR/dino_resnet50_pretrain.pth', map_location=device), strict=False)
+        model.fc = torch.nn.Linear(2048, num_classes)
 
     else:
         model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
-    model = nn.DataParallel(model)
+    
     model.to(device)
+
     # train_adaptation(model, train_loader, 5, device)
 
-    ema_model = timm.utils.ModelEmaV2(model, decay = 0.999, device = device)
+    ema_model = timm.utils.ModelEmaV2(model, decay = 0.99, device = device)
     
 
     criterion = torch.nn.CrossEntropyLoss()
@@ -99,13 +111,13 @@ def train():
         optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-03)
     else:
         if args.data == 'clothing1m':
-            lr = 0.001
+            lr = 0.002
         else:
-            lr = 0.001
-        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 1e-04)
-            
+            lr = 0.003
+        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 5e-04)
 
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=0.0002)
+
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2)   
     print(train_loader.dataset[0][0].shape)
 
@@ -119,28 +131,39 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
-
         correct_ema = 0
         for batch_idx, (inputs, targets) in enumerate(train_loader):
-            if batch_idx == 256:
-                break
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
 
             outputs = model(inputs)
+            outputs_masking = model(masking_image(inputs, 0.2))
             with torch.no_grad():
                 outputs_ema = ema_model.module(inputs)
-            
+                outputs_ema = torch.softmax(outputs_ema, dim=1)
+
+                outputs_ema_maskings = []
+                for i in range(10):
+                    outputs_ema_masking = ema_model.module(masking_image(inputs, 0.2))
+                    outputs_ema_maskings.append(outputs_ema_masking.unsqueeze(0))
+                outputs_ema_maskings = torch.cat(outputs_ema_maskings, dim=0)
+            outputs_ema_maskings = outputs_ema_maskings.mean(0)
+            outputs_ema_maskings = torch.softmax(outputs_ema_maskings, dim=1)
+
+            pseudo_label_weight_masking, pseudo_label_ema_masking = outputs_ema_maskings.max(dim=1)
+            pseudo_label_weight, pseudo_label_ema = outputs_ema.max(dim=1)
+            # print(pseudo_label_weight_masking)
             if check:
-                pseudo_label_ema = outputs_ema.max(dim=1).indices
-                ce_loss = criterion_noreduction(outputs, pseudo_label_ema)[pseudo_label_ema == targets]
-                # consistency_loss = entropy(outputs)[pseudo_label_ema != targets]
-                # print(ce_loss.shape, consistency_loss.shape)
-                loss = ce_loss.mean()# + consistency_loss.mean()
+                ce_loss = criterion_noreduction(outputs, pseudo_label_ema)* pseudo_label_weight_masking#[pseudo_label_ema_masking == pseudo_label_ema]
+                consistency_loss = criterion_noreduction(outputs, pseudo_label_ema_masking) * pseudo_label_weight_masking
+                consistency_loss += criterion_noreduction(outputs_masking, pseudo_label_ema) * pseudo_label_weight
+                loss = ce_loss.mean() + consistency_loss.mean()
             else:
                 ce_loss = criterion(outputs, targets)
-                consistency_loss = softmax_entropy(outputs, outputs_ema).mean()
-                loss = ce_loss + consistency_loss
+                consistency_loss = criterion_noreduction(outputs_masking, pseudo_label_ema) * pseudo_label_weight
+                loss = ce_loss + consistency_loss.mean()
+            # consistency_loss = softmax_entropy(outputs, outputs_ema)
+
             loss.backward()            
             optimizer.step()
 
@@ -148,26 +171,23 @@ def train():
             total_loss += loss
             total += targets.size(0)
             _, predicted = outputs[:len(targets)].max(1)            
-            correct += predicted.eq(targets).sum().item()     
+            correct += predicted.eq(targets).sum().item()       
 
-            _, predicted_ema = outputs_ema[:len(targets)].max(1)   
-            correct_ema += predicted_ema.eq(targets).sum().item() 
+            _, predicted_ema = outputs_ema[:len(targets)].max(1)    
+            correct_ema += predicted_ema.eq(targets).sum().item()       
+
             print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                         % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')                       
         train_accuracy = correct/total
-        train_avg_loss = total_loss/len(train_loader)
         ema_accuracy = correct_ema/total
+
+        train_avg_loss = total_loss/len(train_loader)
         print()
 
-        ## validation
-        total_loss = 0
-        total = 0
-        correct = 0
         valid_accuracy = utils.validation_accuracy(model, valid_loader, device)
         scheduler.step()
 
         saver.save_checkpoint(epoch, metric = valid_accuracy)
-        # ema_accuracy = utils.validation_accuracy(ema_model.module, train_loader, device)
         
         if ema_accuracy > train_accuracy and not check:
             check = True

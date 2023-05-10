@@ -15,7 +15,7 @@ import models
 
 def eval():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--net','-n', default = 'resnet18', type=str)
+    parser.add_argument('--net','-n', default = 'vit_tiny_patch16_224', type=str)
     parser.add_argument('--data', '-d', type=str)
     parser.add_argument('--gpu', '-g', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -36,6 +36,7 @@ def eval():
     else:
         valid_loader = get_svhn(dataset_path, batch_size)
         
+    model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)
     if args.net == 'resnet18':
         model = models.ResNet18(num_classes=num_classes)
         

@@ -5,25 +5,26 @@ import torch.nn.functional as F
 import argparse
 import timm
 import numpy as np
-import clip
 
 import utils
 import models
+import losses
 
 def softmax_entropy(x, x_ema):# -> torch.Tensor:
     """Entropy of softmax distribution from logits."""
     return -(x_ema.softmax(1) * x.log_softmax(1)).sum(1)
 
-def entropy(x):
-    return -(x.softmax(1) * x.log_softmax(1)).sum(1)
+def masking_image(x, ratio):
+    x_ = x.clone()
+    B, _, H, W = x.shape
 
-def train_adaptation(model, train_loader, epochs, device):
-    model.train()
-    for e in range(epochs):
-        for batch_idx, (inputs, targets) in enumerate(train_loader):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = model(inputs)
-            
+    mshape = B, 1, round(H / 16), round(W / 16)
+    input_mask = torch.rand(mshape, device=x_.device)
+    input_mask = (input_mask > ratio).float()
+    input_mask = F.interpolate(input_mask, scale_factor=16, mode='nearest')
+    masked_x = x_ * input_mask
+    return masked_x
+
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--net','-n', default = 'vit_tiny_patch16_224', type=str)
@@ -58,7 +59,7 @@ def train():
     if 'cifar' in args.data:
         print('asym:', args.asym)
         train_loader, valid_loader = utils.get_cifar_noisy(args.data, dataset_path, batch_size, args.nr, args.asym)
-        lrde = [80, 120]
+        lrde = [50, 75]
     elif 'food101n' in args.data:
         train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
         lrde = [50, 75]
@@ -71,19 +72,17 @@ def train():
     print(args.net)
 
     if args.net == 'resnet18':
-        model = models.ResNet18(num_classes=1000)
-        model.load_state_dict(torch.load('/SSDe/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
-        model.fc = torch.nn.Linear(512, num_classes)
+        model = models.ResNet18(num_classes=num_classes)
+        # model.load_state_dict(torch.load('/SSDe/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
+        # model.fc = torch.nn.Linear(512, num_classes)
     elif args.net == 'resnet50':
         model = timm.create_model(args.net, pretrained=False, num_classes=num_classes)  
         model.load_state_dict(torch.load('/SSDe/yyg/RR/dino_resnet50_pretrain.pth', map_location=device), strict=False)
         model.fc = torch.nn.Linear(2048, num_classes)
 
     else:
-        model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
-    
+        model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)
     model.to(device)
-
     # train_adaptation(model, train_loader, 5, device)
 
     ema_model = timm.utils.ModelEmaV2(model, decay = 0.99, device = device)
@@ -92,22 +91,15 @@ def train():
     criterion = torch.nn.CrossEntropyLoss()
     criterion_noreduction = torch.nn.CrossEntropyLoss(reduction='none')
 
+    supcon_loss = losses.SupConLoss(device = device)
+
     model.eval()
     print(utils.validation_accuracy(model, valid_loader, device))
 
-    if 'vit' in args.net:
-        optimizer = torch.optim.SGD(model.parameters(), lr = 0.003, momentum=0.9, weight_decay = 1e-03)
-    elif 'resnet34' in args.net:
-        optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-03)
-    else:
-        if args.data == 'clothing1m':
-            lr = 0.002
-        else:
-            lr = 0.02
-        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 5e-04)
-            
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=0.0002)
-    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
+    optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-04)
+
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=0.0002)
+
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2)   
     print(train_loader.dataset[0][0].shape)
 
@@ -121,23 +113,77 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
+        correct_ema = 0
+        supcon_loss_total = 0
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
 
-            outputs = model(inputs)
-            outputs_ema = ema_model.module(inputs)
-            
+            with torch.no_grad():
+                outputs_ema = ema_model.module(inputs)
+            pseudo_label_weight, pseudo_label_ema = outputs_ema.max(dim=1)
+
             if check:
-                pseudo_label_ema = outputs_ema.max(dim=1).indices
-                ce_loss = criterion_noreduction(outputs, pseudo_label_ema)[pseudo_label_ema == targets]
-                # consistency_loss = entropy(outputs)[pseudo_label_ema != targets]
-                # print(ce_loss.shape, consistency_loss.shape)
-                loss = ce_loss.mean()# + consistency_loss.mean()
+                # After Mean teacher is learn easy data.
+                # Maksing loss is used.
+                # Easy data (Correctly labeled data) => Learng masked image modeling
+                easy_data = inputs[pseudo_label_ema == targets]
+                easy_label = pseudo_label_ema[pseudo_label_ema == targets]
+                easy_weight = inputs.size(0)/easy_data.size(0)
+                # Hard data (Wrongly labeled data) => Predict correct label by multi masked image and train it
+                hard_data = inputs[pseudo_label_ema != targets]
+                hard_label = None
+                hard_weight = inputs.size(0)/hard_data.size(0)
+                
+                # CE loss for Easy data
+                outputs_easy = model(easy_data)
+                ce_loss = criterion_noreduction(outputs_easy, easy_label)
+
+                # masked image modeling loss using CE Loss
+                mim_loss = 0
+                for i in range(2):
+                    masked_easy_data = masking_image(easy_data, 0.5)
+                    cls_tkn_s = model.forward_features(masked_easy_data)[:, 0]
+                    with torch.no_grad():
+                        cls_tkn_t = ema_model.module.forward_features(easy_data)[:, 0]
+
+                    mim_loss += torch.mean(1.0 - F.cosine_similarity(cls_tkn_s, cls_tkn_t))                
+                    
+                # print(mim_loss)
+                supcon_loss_total += mim_loss
+                # 
+                outputs_hard = model(hard_data)
+                # print(outputs_hard.shape)
+                with torch.no_grad():
+                    outputs_ema_maskings = []
+                    for i in range(5):
+                        outputs_ema_masking = ema_model.module(masking_image(hard_data, 0.5))
+                        outputs_ema_masking = torch.softmax(outputs_ema_masking, dim=1)
+                        outputs_ema_maskings.append(outputs_ema_masking.unsqueeze(0))
+                    outputs_hard_ema = ema_model.module(hard_data)
+                    outputs_hard_ema = torch.softmax(outputs_hard_ema, dim=1)
+
+                    outputs_ema_maskings = torch.cat(outputs_ema_maskings, dim=0)
+                outputs_ema_maskings = outputs_ema_maskings.mean(0)
+
+                outputs_ema_maskings = (outputs_ema_maskings + outputs_hard_ema)/2 
+
+                masking_weight, masking_pseudo_label = outputs_ema_maskings.max(dim=1)
+                hard_loss = criterion_noreduction(outputs_hard, masking_pseudo_label) * masking_weight
+                loss = easy_weight * ce_loss.mean() + hard_weight * (mim_loss/2 + hard_loss.mean()) 
+
+                # outputs concatenation
+                with torch.no_grad():
+                    outputs = model(inputs)
             else:
+                # Training is started.
+                # softmax entropy between mean teacher and student is used.
+                outputs = model(inputs)
                 ce_loss = criterion(outputs, targets)
-                consistency_loss = softmax_entropy(outputs, outputs_ema).mean()
-                loss = ce_loss + consistency_loss
+                consistency_loss = softmax_entropy(outputs, outputs_ema) #criterion_noreduction(outputs, pseudo_label_ema) * pseudo_label_weight
+                loss = ce_loss + consistency_loss.mean()
+            # consistency_loss = 
+
             loss.backward()            
             optimizer.step()
 
@@ -145,27 +191,28 @@ def train():
             total_loss += loss
             total += targets.size(0)
             _, predicted = outputs[:len(targets)].max(1)            
-            correct += predicted.eq(targets).sum().item()            
+            correct += predicted.eq(targets).sum().item()       
+
+            _, predicted_ema = outputs_ema[:len(targets)].max(1)    
+            correct_ema += predicted_ema.eq(targets).sum().item()       
+
             print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                         % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')                       
         train_accuracy = correct/total
+        ema_accuracy = correct_ema/total
+
         train_avg_loss = total_loss/len(train_loader)
         print()
 
-        ## validation
-        total_loss = 0
-        total = 0
-        correct = 0
         valid_accuracy = utils.validation_accuracy(model, valid_loader, device)
         scheduler.step()
 
         saver.save_checkpoint(epoch, metric = valid_accuracy)
-        ema_accuracy = utils.validation_accuracy(ema_model.module, train_loader, device)
         
         if ema_accuracy > train_accuracy and not check:
             check = True
 
-        print(ema_accuracy, train_accuracy, check)
+        print(ema_accuracy, train_accuracy, check, supcon_loss_total/len(train_loader))
         # print()
         valid_accuracy_ema = utils.validation_accuracy(ema_model.module, valid_loader, device)
         print(valid_accuracy_ema)
