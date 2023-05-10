@@ -58,10 +58,14 @@ def train():
 
     if args.net == 'resnet18':
         model = models.ResNet18(num_classes=1000)
-        model.load_state_dict(torch.load('/SSDb/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
+        # model.load_state_dict(torch.load('/SSDb/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
         model.fc = torch.nn.Linear(512, num_classes)
     else:
         model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
+        # model.load_state_dict(torch.load('Cifar10/vit_mim/last.pth.tar', map_location=device)['state_dict'], strict=False)
+        # model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+        # model = torch.hub.load('facebookresearch/dino:main', 'dino_vits16')
+        model.head = torch.nn.Linear(384, num_classes)
     model.to(device)
     
     criterion = torch.nn.CrossEntropyLoss()
@@ -69,16 +73,18 @@ def train():
     print(utils.validation_accuracy(model, valid_loader, device))
     
     if 'vit' in args.net:
-        optimizer = torch.optim.SGD(model.parameters(), lr = 0.003, momentum=0.9, weight_decay = 1e-04)
+        optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-04)
     else:
         if args.data == 'clothing1m':
-            lr = 0.002
+            lr = 0.01
         else:
-            lr = 0.001
-        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 1e-04)
+            lr = 0.02
+        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 5e-04)
 
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
-    saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2)   
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=0.0002)
+    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
+    saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2) 
+    f = open(save_path + '/record.txt', 'w')
     print(train_loader.dataset[0][0].shape)
     for epoch in range(max_epoch):
         ## training
@@ -87,6 +93,8 @@ def train():
         total = 0
         correct = 0
         for batch_idx, (inputs, targets) in enumerate(train_loader):
+            if batch_idx == 1000:
+                break
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             
@@ -117,5 +125,7 @@ def train():
         saver.save_checkpoint(epoch, metric = valid_accuracy)
         print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy))
         print(scheduler.get_last_lr())
+        f.write('{}\t{}\t{}\n'.format(epoch, train_accuracy, valid_accuracy))
+    f.close()
 if __name__ =='__main__':
     train()

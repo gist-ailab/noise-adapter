@@ -80,7 +80,7 @@ def train():
 
     else:
         model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
-    
+    model = nn.DataParallel(model)
     model.to(device)
     # train_adaptation(model, train_loader, 5, device)
 
@@ -119,9 +119,10 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
+
+        correct_ema = 0
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             if batch_idx == 2000:
-                break
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
 
@@ -146,11 +147,15 @@ def train():
             total_loss += loss
             total += targets.size(0)
             _, predicted = outputs[:len(targets)].max(1)            
-            correct += predicted.eq(targets).sum().item()            
+            correct += predicted.eq(targets).sum().item()     
+
+            _, predicted_ema = outputs_ema[:len(targets)].max(1)   
+            correct_ema += predicted_ema.eq(targets).sum().item() 
             print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                         % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')                       
         train_accuracy = correct/total
         train_avg_loss = total_loss/len(train_loader)
+        ema_accuracy = correct_ema/total
         print()
 
         ## validation
@@ -161,7 +166,7 @@ def train():
         scheduler.step()
 
         saver.save_checkpoint(epoch, metric = valid_accuracy)
-        ema_accuracy = utils.validation_accuracy(ema_model.module, train_loader, device)
+        # ema_accuracy = utils.validation_accuracy(ema_model.module, train_loader, device)
         
         if ema_accuracy > train_accuracy and not check:
             check = True
