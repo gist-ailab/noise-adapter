@@ -38,6 +38,10 @@ def eval():
         
     if args.net == 'resnet18':
         model = models.ResNet18(num_classes=num_classes)
+
+    if args.net == 'resnet50':
+        model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
+
         
     if 'wrn40' == args.net:
         import wrn
