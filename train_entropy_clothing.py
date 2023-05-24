@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import argparse
 import timm
 import numpy as np
-import clip
 
 import utils
 import models
@@ -64,7 +63,7 @@ def train():
         lrde = [50, 75]
     elif 'clothing1m' in args.data:
         train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
-        lrde = [40]
+        lrde = [30]
     elif 'animal10n' in args.data:
         train_loader, valid_loader = utils.get_animal10n(dataset_path, batch_size)
         lrde = [50, 75]
@@ -75,13 +74,13 @@ def train():
         model.load_state_dict(torch.load('/SSDe/yyg/RR/pretrained_resnet18/last.pth.tar', map_location=device)['state_dict'])
         model.fc = torch.nn.Linear(512, num_classes)
     elif args.net == 'resnet50':
-        model = timm.create_model(args.net, pretrained=False, num_classes=num_classes)  
-        model.load_state_dict(torch.load('/SSDe/yyg/RR/dino_resnet50_pretrain.pth', map_location=device), strict=False)
+        model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
+        # model.load_state_dict(torch.load('/SSDe/yyg/RR/dino_resnet50_pretrain.pth', map_location=device), strict=False)
         model.fc = torch.nn.Linear(2048, num_classes)
 
     else:
         model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
-    
+    model = nn.DataParallel(model)
     model.to(device)
     # train_adaptation(model, train_loader, 5, device)
 
@@ -100,10 +99,10 @@ def train():
         optimizer = torch.optim.SGD(model.parameters(), lr = 0.001, momentum=0.9, weight_decay = 1e-03)
     else:
         if args.data == 'clothing1m':
-            lr = 0.002
+            lr = 0.001
         else:
             lr = 0.001
-        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 1e-04)
+        optimizer = torch.optim.SGD(model.parameters(), lr = lr, momentum=0.9, weight_decay = 1e-03)
             
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lrde)
@@ -113,21 +112,23 @@ def train():
     f = open(save_path + '/record.txt', 'w')
     ce_lambda = 1.0
     check = False
-    for epoch in range(max_epoch):
+    for epoch in range(60):
         ## training
         model.train()
         ema_model.eval()
         total_loss = 0
         total = 0
         correct = 0
+
+        correct_ema = 0
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             if batch_idx == 2000:
-                continue
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
 
             outputs = model(inputs)
-            outputs_ema = ema_model.module(inputs)
+            with torch.no_grad():
+                outputs_ema = ema_model.module(inputs)
             
             if check:
                 pseudo_label_ema = outputs_ema.max(dim=1).indices
@@ -146,11 +147,15 @@ def train():
             total_loss += loss
             total += targets.size(0)
             _, predicted = outputs[:len(targets)].max(1)            
-            correct += predicted.eq(targets).sum().item()            
+            correct += predicted.eq(targets).sum().item()     
+
+            _, predicted_ema = outputs_ema[:len(targets)].max(1)   
+            correct_ema += predicted_ema.eq(targets).sum().item() 
             print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                         % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')                       
         train_accuracy = correct/total
         train_avg_loss = total_loss/len(train_loader)
+        ema_accuracy = correct_ema/total
         print()
 
         ## validation
@@ -161,7 +166,7 @@ def train():
         scheduler.step()
 
         saver.save_checkpoint(epoch, metric = valid_accuracy)
-        ema_accuracy = utils.validation_accuracy(ema_model.module, train_loader, device)
+        # ema_accuracy = utils.validation_accuracy(ema_model.module, train_loader, device)
         
         if ema_accuracy > train_accuracy and not check:
             check = True

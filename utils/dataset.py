@@ -2,6 +2,7 @@ import json
 import torch.utils.data as data
 import numpy as np
 import torch
+import torch.nn.functional as F
 import os
 import random
 
@@ -27,8 +28,34 @@ train_transform_cifar = transforms.Compose([transforms.Resize([size,size]), tran
 test_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.ToTensor(), cifar10_normalize])#, )
 
 
-train_transform = transforms.Compose([transforms.Resize([224,224]), transforms.RandomHorizontalFlip(), transforms.ToTensor(), imagenet_normalize])
-test_transform = transforms.Compose([transforms.Resize([224,224]), transforms.ToTensor(), imagenet_normalize])
+# train_transform = transforms.Compose([transforms.Resize([224,224]), transforms.RandomHorizontalFlip(), transforms.ToTensor(), imagenet_normalize])
+# test_transform = transforms.Compose([transforms.Resize([224,224]), transforms.ToTensor(), imagenet_normalize])
+
+train_transform =  transforms.Compose([transforms.Resize([256,256]), transforms.RandomCrop([224, 224]), transforms.RandomHorizontalFlip(), transforms.ToTensor(), imagenet_normalize])
+test_transform = transforms.Compose([transforms.Resize([256,256]), transforms.CenterCrop([224,224]), transforms.ToTensor(), imagenet_normalize])
+
+
+class masking_dataset(torch.utils.data.Dataset): 
+    def __init__(self, dataset, transform, ratio):
+        self.dataset = dataset
+        self.transform = transform
+        self.ratio = ratio
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        x, y = self.dataset[idx]
+
+        x_ = x.clone()
+        _, H, W = x.shape
+
+        mshape = 1, round(H / 2), round(W / 2)
+        input_mask = torch.rand(mshape, device=x_.device)
+        input_mask = (input_mask > self.ratio).float()
+        input_mask = F.interpolate(input_mask.unsqueeze(0), scale_factor=2, mode='nearest')
+        masked_x = x_ * input_mask.squeeze(0)
+        return x, masked_x, y
 
 
 def read_conf(json_path):
@@ -145,6 +172,7 @@ def get_cifar_noisy(dataset, folder, batch_size, noisy_rate=0.2, asym=False):
         noisy_data = cifar100Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate, asym=asym)
         test_data = dset.CIFAR100(folder, train=False, transform=test_transform_cifar, download=True)
         num_classes = 100
+
     train_loader = torch.utils.data.DataLoader(noisy_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
     valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
     return train_loader, valid_loader
@@ -225,6 +253,8 @@ def get_animal10n(folder, batch_size):
     train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
     valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
     return train_loader, valid_loader
+
+
 
 if __name__ == '__main__':
     # get_food101n('/SSDe/yyg/data/Food-101N_release', 2)
