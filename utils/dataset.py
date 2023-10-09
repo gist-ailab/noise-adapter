@@ -15,12 +15,12 @@ import torchvision
 mean = (0.485, 0.456, 0.406)
 std = (0.229, 0.224, 0.225)
 # cifar10_normalize =  transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-# cifar10_normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-cifar10_normalize = transforms.Normalize(mean, std)
+cifar10_normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+# cifar10_normalize = transforms.Normalize(mean, std)
 
 imagenet_normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
-size = 224
+size = 32
 
 # , transforms.Normalize(mean, std)
 train_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.RandomHorizontalFlip(), transforms.RandomCrop(size, padding=4),
@@ -163,17 +163,96 @@ class cifar100Nosiy(torchvision.datasets.CIFAR100):
                 # print("Noisy class %s, has %s samples." % (i, n_noisy))
             return
 
-def get_cifar_noisy(dataset, folder, batch_size, noisy_rate=0.2, asym=False):
+def get_cifar_noisy_(dataset, folder, batch_size, noisy_rate=0.2, asym=False, preprocess=None):
+    class cifar10NosiyClip(torchvision.datasets.CIFAR10):
+        def __init__(self, root, train=True, transform=None, clip_transform=None, target_transform=None, download=True, nosiy_rate=0.0, asym=False):
+            np.random.seed(0)
+
+            self.clip_transform = clip_transform
+            # print(np.random.randn(5))
+            super(cifar10NosiyClip, self).__init__(root, transform=transform, target_transform=target_transform, download=True)
+            self.noise_pos = torch.zeros_like(torch.tensor(self.targets))
+
+            if asym:
+                # automobile < - truck, bird -> airplane, cat <-> dog, deer -> horse
+                source_class = [9, 2, 3, 5, 4]
+                target_class = [1, 0, 5, 3, 7]
+                for s, t in zip(source_class, target_class):
+                    cls_idx = np.where(np.array(self.targets) == s)[0]
+                    n_noisy = int(nosiy_rate * cls_idx.shape[0])
+                    noisy_sample_index = np.random.choice(cls_idx, n_noisy, replace=False)
+                    for idx in noisy_sample_index:
+                        self.targets[idx] = t
+                return
+            elif nosiy_rate > 0:
+                n_samples = len(self.targets)
+                n_noisy = int(nosiy_rate * n_samples)
+                print("%d Noisy samples" % (n_noisy))
+                class_index = [np.where(np.array(self.targets) == i)[0] for i in range(10)]
+                class_noisy = int(n_noisy / 10)
+                noisy_idx = []
+                for d in range(10):
+                    noisy_class_index = np.random.choice(class_index[d], class_noisy, replace=False)
+                    # print(noisy_class_index[:10])
+                    noisy_idx.extend(noisy_class_index)
+                    # print("Class %d, number of noisy % d" % (d, len(noisy_class_index)))
+                for i in noisy_idx:
+                    self.targets[i] = other_class(n_classes=10, current_class=self.targets[i])
+                print(len(noisy_idx))
+                # print("Print noisy label generation statistics:")
+                for i in range(10):
+                    n_noisy = np.sum(np.array(self.targets) == i)
+                    # print("Noisy class %s, has %s samples." % (i, n_noisy))
+                return
+
+        def __getitem__(self, idx):
+            x = self.data[idx]
+            y = self.targets[idx]
+            n = self.noise_pos[idx]
+
+            x = Image.fromarray(x)
+            x_ = self.clip_transform(x)
+            x = self.transform(x)
+            return x, x_, y, n
+
     if dataset == 'cifar10':
-        noisy_data = cifar10Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate, asym=asym)
+        noisy_data = cifar10NosiyClip(folder, train=True, transform=train_transform_cifar, clip_transform=preprocess, nosiy_rate=noisy_rate, asym=asym)
         test_data = dset.CIFAR10(folder, train=False, transform=test_transform_cifar, download=True)
         num_classes = 10
     if dataset == 'cifar100':
-        noisy_data = cifar100Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate, asym=asym)
+        noisy_data = cifar10NosiyClip(folder, train=True, transform=train_transform_cifar, clip_transform=preprocess, nosiy_rate=noisy_rate, asym=asym)
         test_data = dset.CIFAR100(folder, train=False, transform=test_transform_cifar, download=True)
         num_classes = 100
 
     train_loader = torch.utils.data.DataLoader(noisy_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
+    valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    return train_loader, valid_loader
+
+def get_cifar_noisy(dataset, folder, batch_size, noisy_rate=0.2, asym=False, preprocess=None):
+    if dataset == 'cifar10':
+        noisy_data = cifar10Nosiy(folder, train=True, transform=preprocess, nosiy_rate=noisy_rate, asym=asym)
+        test_data = dset.CIFAR10(folder, train=False, transform=preprocess, download=True)
+        num_classes = 10
+    if dataset == 'cifar100':
+        noisy_data = cifar100Nosiy(folder, train=True, transform=preprocess, nosiy_rate=noisy_rate, asym=asym)
+        test_data = dset.CIFAR100(folder, train=False, transform=test_transform_cifar, download=True)
+        num_classes = 100
+
+    train_loader = torch.utils.data.DataLoader(noisy_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
+    valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    return train_loader, valid_loader
+
+def get_cifar_noisy_true(dataset, folder, batch_size, noisy_rate=0.2, asym=False, preprocess=None):
+    if dataset == 'cifar10':
+        noisy_data = cifar10Nosiy(folder, train=True, transform=preprocess, nosiy_rate=noisy_rate, asym=asym)
+        test_data = dset.CIFAR10(folder, train=True, transform=preprocess, download=True)
+        num_classes = 10
+    if dataset == 'cifar100':
+        noisy_data = cifar100Nosiy(folder, train=True, transform=preprocess, nosiy_rate=noisy_rate, asym=asym)
+        test_data = dset.CIFAR100(folder, train=True, transform=test_transform_cifar, download=True)
+        num_classes = 100
+
+    train_loader = torch.utils.data.DataLoader(noisy_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
     valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
     return train_loader, valid_loader
 

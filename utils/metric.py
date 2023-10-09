@@ -33,7 +33,16 @@ def validation_accuracy(model, loader, device):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)
-            outputs = model(inputs)
+            with torch.no_grad():
+                outputs = model(inputs)
+                # print(outputs['x_norm_clstoken'].shape, outputs['x_norm_patchtokens'].shape)  
+            #     class_token = outputs['x_norm_clstoken']
+            #     patch_token = outputs['x_norm_patchtokens']
+
+            #     tokens = torch.cat([class_token, patch_token.mean(1)], dim=1)
+            # # print(tokens.shape)
+            # outputs = model.head(tokens)
+            
             #print(outputs.shape)
             total += targets.size(0)
             _, predicted = outputs.max(1)  

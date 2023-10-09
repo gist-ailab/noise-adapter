@@ -1,7 +1,7 @@
 {
     "epoch" : "100",
-    "id_dataset" : "/SSDb/yyg/data/cifar100",
+    "id_dataset" : "../data/cifar100",
     "batch_size" : 128,
-    "save_path" : "/SSDb/yyg/RR/Cifar100/",
+    "save_path" : "./Cifar100/",
     "num_classes" : 100
 }
