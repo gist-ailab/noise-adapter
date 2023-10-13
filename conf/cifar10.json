@@ -1,7 +1,0 @@
-{
-    "epoch" : "200",
-    "id_dataset" : "../data/cifar10",
-    "batch_size" : 128,
-    "save_path" : "./Cifar10/",
-    "num_classes" : 10
-}
