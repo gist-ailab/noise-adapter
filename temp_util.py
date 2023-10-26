@@ -51,5 +51,19 @@ def get_loader(folder, batch_size=32, noise_rate = 0.0, shuffle = True, filter_p
     valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
-
+def validation_accuracy(model, loader, device):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = model(inputs)
+            #print(outputs.shape)
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
 
