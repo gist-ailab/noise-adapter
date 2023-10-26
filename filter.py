@@ -114,3 +114,11 @@ def train():
         total+=1
     f.close()
     # print(total, correct)
+
+    print(filtered_noise, filtered_total)
+    print(unfiltered_noise, unfiltered_total)
+
+        
+
+if __name__ =='__main__':
+    train()
