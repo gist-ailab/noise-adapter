@@ -18,7 +18,7 @@ def train():
     if not os.path.exists(save_path):
         os.mkdir(save_path)
 
-    lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch)]
+    lr_decay = [int(0.8*max_epoch), int(0.9*max_epoch)]
 
     train_loader, valid_loader = utils.get_loader(data_path, noise_rate = 0.2, filter_path=filter_path)
 
@@ -28,7 +28,8 @@ def train():
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
     
-    optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
+    # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay = 1e-4)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2) 
