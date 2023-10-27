@@ -20,10 +20,10 @@ def train():
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch)]
 
-    train_loader, valid_loader = utils.get_loader(data_path, noise_rate = 0.2, filter_path=filter_path)
+    # train_loader, valid_loader = utils.get_loader(data_path, noise_rate = 0.2, filter_path=filter_path)
 
-    model = timm.create_model(network, pretrained=True, num_classes=2) 
-    model.to(device)
+    # model = timm.create_model(network, pretrained=True, num_classes=2) 
+    # model.to(device)
     
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()

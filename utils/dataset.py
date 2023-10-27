@@ -254,7 +254,36 @@ def get_animal10n(folder, batch_size):
     valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
     return train_loader, valid_loader
 
+def get_loader(folder, batch_size=32, noise_rate = 0.0, shuffle = True, filter_path=None):
+    # print(noise_rate)
 
+    train_data = dset.ImageFolder(os.path.join(folder, 'train'), transform = train_transform)
+    if noise_rate > 0.0:
+        new_samples = []
+        for data in train_data.samples:
+            if random.random()<0.2:
+                label = 0 if data[1] == 1 else 1
+            else:
+                label = data[1]
+            new_samples.append([data[0], label])
+            # print(data[1], label)
+        train_data.samples = new_samples
+    if not filter_path is None:
+        new_samples = []
+        with open(filter_path, 'r') as f:
+            lines = f.readlines()
+        for i, data in enumerate(train_data.samples):
+            label = lines[i].split('\n')
+            new_samples.append([data[0], int(label[0])])
+        train_data.samples = new_samples
+        
+
+    test_data = dset.ImageFolder(os.path.join(folder, 'test'), transform = test_transform)
+
+
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=shuffle, pin_memory=True, num_workers = 8)
+    valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
 
 if __name__ == '__main__':
     # get_food101n('/SSDe/yyg/data/Food-101N_release', 2)
