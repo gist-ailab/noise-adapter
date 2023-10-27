@@ -16,13 +16,6 @@ def softmax_entropy(x, x_ema):# -> torch.Tensor:
 
 def entropy(x):
     return -(x.softmax(1) * x.log_softmax(1)).sum(1)
-
-def train_adaptation(model, train_loader, epochs, device):
-    model.train()
-    for e in range(epochs):
-        for batch_idx, (inputs, targets) in enumerate(train_loader):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = model(inputs)
             
 def train():
     parser = argparse.ArgumentParser()
