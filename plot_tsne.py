@@ -16,22 +16,23 @@ import inspect
 def forward_features(model, inputs):
     out = model.forward_features(inputs)
     out = model.global_pool(out).view(-1, 512) # Class token
-    # out = model(inputs)
-    # x = model.patch_embed(inputs)
-    # x = model._pos_embed(x)
-    # x = model.norm_pre(x)
-    # x = model.blocks[:-1](x)
-    # x = model.blocks[-1].norm1(x)
-    # B, N, C = x.shape
-    # # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
-    # # print( model.blocks[-1].attn.num_heads, model.blocks[-1].attn.num_heads)
-    # qkv = model.blocks[-1].attn.qkv(x).reshape(B, N, 3, model.blocks[-1].attn.num_heads, 64).permute(2, 0, 3, 1, 4)
-    # q, k, v = qkv.unbind(0)
-    # # q, k = model.blocks[-1].attn.q_norm(q), model.blocks[-1].attn.k_norm(k)
+    out = model(inputs)
+    # For vit
+    x = model.patch_embed(inputs)
+    x = model._pos_embed(x)
+    x = model.norm_pre(x)
+    x = model.blocks[:-1](x)
+    x = model.blocks[-1].norm1(x)
+    B, N, C = x.shape
+    # qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+    # print( model.blocks[-1].attn.num_heads, model.blocks[-1].attn.num_heads)
+    qkv = model.blocks[-1].attn.qkv(x).reshape(B, N, 3, model.blocks[-1].attn.num_heads, 64).permute(2, 0, 3, 1, 4)
+    q, k, v = qkv.unbind(0)
+    # q, k = model.blocks[-1].attn.q_norm(q), model.blocks[-1].attn.k_norm(k)
     
-    # # print(qkv.shape, q.shape, k.shape, v.shape)
-    # k = k.mean(1).mean(1)
-    # print(k.shape)
+    # print(qkv.shape, q.shape, k.shape, v.shape)
+    k = k.mean(1).mean(1)
+    print(k.shape)
     return out
 
 def calculate_embeddings(model, loader, device):
