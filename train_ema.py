@@ -51,15 +51,6 @@ def train():
         print('asym:', args.asym)
         train_loader, valid_loader = utils.get_cifar_noisy(args.data, dataset_path, batch_size, args.nr, args.asym)
         lrde = [50, 75]
-    elif 'food101n' in args.data:
-        train_loader, valid_loader = utils.get_food101n(dataset_path, batch_size)
-        lrde = [50, 75]
-    elif 'clothing1m' in args.data:
-        train_loader, valid_loader = utils.get_clothing1m(dataset_path, batch_size)
-        lrde = [40]
-    elif 'animal10n' in args.data:
-        train_loader, valid_loader = utils.get_animal10n(dataset_path, batch_size)
-        lrde = [50, 75]
     print(args.net)
 
     if args.net == 'resnet18':
