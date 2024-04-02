@@ -8,6 +8,7 @@ import numpy as np
 import utils
 
 import random
+import rein
 
 def train():
     parser = argparse.ArgumentParser()
@@ -34,15 +35,32 @@ def train():
 
     # model = timm.create_model(network, pretrained=True, num_classes=2) 
     model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+    dino_state_dict = model.state_dict()
+
+    model = rein.ReinsDinoVisionTransformer(
+        patch_size=14,
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        mlp_ratio=4,
+        img_size=518,
+        ffn_layer="mlp",
+        init_values=1e-05,
+        block_chunks=0,
+        qkv_bias=True,
+        proj_bias=True,
+        ffn_bias=True
+    )
+    model.load_state_dict(dino_state_dict, strict=False)
     model.linear = nn.Linear(384, config['num_classes'])
     model.to(device)
     
-    
+    print(model)
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
     
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer = torch.optim.AdamW(model.linear.parameters(), lr=1e-3, weight_decay = 1e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay = 1e-5)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model.linear, optimizer, checkpoint_dir= save_path, max_history = 2) 
@@ -58,9 +76,9 @@ def train():
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             
-            with torch.no_grad():
-                outputs = model(inputs)
-            outputs = model.linear(outputs)
+            features = model.forward_features(inputs)
+            features = features[:, 0, :]
+            outputs = model.linear(features)
             
             loss = criterion(outputs, targets)
             loss.backward()            
@@ -81,7 +99,7 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
-        valid_accuracy = utils.validation_accuracy(model, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
         scheduler.step()
 
         saver.save_checkpoint(epoch, metric = valid_accuracy)

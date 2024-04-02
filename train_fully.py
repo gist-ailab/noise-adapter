@@ -42,7 +42,7 @@ def train():
     model.eval()
     
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer = torch.optim.AdamW(model.linear.parameters(), lr=1e-3, weight_decay = 1e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay = 1e-5)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model.linear, optimizer, checkpoint_dir= save_path, max_history = 2) 
@@ -58,8 +58,7 @@ def train():
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             
-            with torch.no_grad():
-                outputs = model(inputs)
+            outputs = model(inputs)
             outputs = model.linear(outputs)
             
             loss = criterion(outputs, targets)
