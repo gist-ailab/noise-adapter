@@ -1,5 +1,7 @@
 import os
 import torch
+import torch.nn as nn
+
 import argparse
 import timm
 import numpy as np
@@ -12,7 +14,7 @@ def train():
     data_path = 'data'
     network = 'resnet18'
     max_epoch = 40
-    save_path = 'checkpoints/filtered_baseline_0.2_1'
+    save_path = './checkpoints/dino_linear_0.2'
     filter_path = 'filter.txt'
 
     if not os.path.exists(save_path):
@@ -22,17 +24,21 @@ def train():
 
     train_loader, valid_loader = utils.get_loader(data_path, noise_rate = 0.2, filter_path=filter_path)
 
-    model = timm.create_model(network, pretrained=True, num_classes=2) 
+    # model = timm.create_model(network, pretrained=True, num_classes=2) 
+    model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+    model.linear = nn.Linear()
+    
     model.to(device)
+    
     
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
     
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay = 1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, momentum=0.9, weight_decay = 1e-5)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
-    saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 2) 
+    saver = timm.utils.CheckpointSaver(model.linear, optimizer, checkpoint_dir= save_path, max_history = 2) 
     print(train_loader.dataset[0][0].shape)
 
     for epoch in range(max_epoch):
