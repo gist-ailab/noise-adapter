@@ -28,25 +28,29 @@ class ReinsDinoVisionTransformer(DinoVisionTransformer):
                 batch_first=True,
                 has_cls_token=True,
             )
-            # print(x.shape)
-            if idx in self.out_indices:
-                outs.append(
-                    x[:, 1:, :].permute(0, 2, 1).reshape(B, -1, H, W).contiguous()
-                )
-                # print(outs[0].shape)
-        return x #self.reins.return_auto(outs)
+        return x
+
+    def forward_features_no_rein(self, x, masks=None):
+        B, _, h, w = x.shape
+        H, W = h // self.patch_size, w // self.patch_size
+        x = self.prepare_tokens_with_masks(x, masks)
+        outs = []
+        for idx, blk in enumerate(self.blocks):
+            x = blk(x)
+        return x
 
     def train(self, mode: bool = True):
         if not mode:
             return super().train(mode)
-        set_requires_grad(self, ["reins"])
-        set_train(self, ["reins"])
+        set_requires_grad(self, ["reins", "linear"])
+        set_train(self, ["reins", "linear"])
 
-    def state_dict(self, destination, prefix, keep_vars):
-        state = super().state_dict(destination, prefix, keep_vars)
-        keys = [k for k in state.keys() if "rein" not in k]
-        for key in keys:
-            state.pop(key)
-            if key in destination:
-                destination.pop(key)
-        return state
+
+    # def state_dict(self, destination, prefix, keep_vars):
+    #     state = super().state_dict(destination, prefix, keep_vars)
+    #     keys = [k for k in state.keys() if "rein" not in k]
+    #     for key in keys:
+    #         state.pop(key)
+    #         if key in destination:
+    #             destination.pop(key)
+    #     return state

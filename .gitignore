@@ -5,3 +5,6 @@
 *.pth
 *.zip
 *.jpg
+
+data/*
+checkpoints/*

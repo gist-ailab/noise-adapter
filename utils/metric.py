@@ -53,13 +53,74 @@ def validation_accuracy_rein(model, loader, device):
             features = model.forward_features(inputs)
             features = features[:, 0, :]
             outputs = model.linear(features)
-            #print(outputs.shape)
+
             total += targets.size(0)
             _, predicted = outputs.max(1)  
             correct += predicted.eq(targets).sum().item()
     valid_accuracy = correct/total
     return valid_accuracy
 
+def validation_accuracy_shared(model, loader, device):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features(inputs)
+            features = features[:, 0, :]
+            outputs = model.linear(features)
+
+            features = model.forward_features_no_rein(inputs)
+            features = features[:, 0, :]
+            outputs_ = model.linear(features)
+            outputs = outputs+outputs_
+            
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
+
+
+
+def validation_accuracy_ours(model, loader, device):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features(inputs)
+            features = features[:, 0, :]
+            outputs = model.linear_rein(features)
+            outputs = outputs #+ outputs_
+
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
+
+def validation_accuracy_linear(model, loader, device):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features_no_rein(inputs)
+            features = features[:, 0, :]
+            outputs = model.linear(features)
+
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
 
 def stable_cumsum(arr, rtol=1e-05, atol=1e-08):
     """Use high precision for cumsum and check that final value matches sum
