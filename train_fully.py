@@ -30,7 +30,10 @@ def train():
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
-    train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate)
+    if args.data == 'ham10000':
+        train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
+    elif args.data == 'aptos':
+        train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
 
     # model = timm.create_model(network, pretrained=True, num_classes=2) 
     model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')

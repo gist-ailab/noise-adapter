@@ -31,7 +31,10 @@ def train():
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
-    train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size=batch_size)
+    if args.data == 'ham10000':
+        train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
+    elif args.data == 'aptos':
+        train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
 
     # model = timm.create_model(network, pretrained=True, num_classes=2) 
     model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
@@ -124,10 +127,13 @@ def train():
         valid_accuracy = utils.validation_accuracy_ours(model, valid_loader, device)
         valid_accuracy_linear = utils.validation_accuracy_linear(model, valid_loader, device)
         scheduler.step()
-
+        if epoch >= max_epoch-10:
+            avg_accuracy += valid_accuracy 
         saver.save_checkpoint(epoch, metric = valid_accuracy)
         print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID [acc - {:.4f}], VALID(linear) [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy, valid_accuracy_linear))
         print(scheduler.get_last_lr())
-
+    with open(os.path.join(save_path, 'avgacc.txt'), 'w') as f:
+        f.write(str(avg_accuracy/10))
+        
 if __name__ =='__main__':
     train()
