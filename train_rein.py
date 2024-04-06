@@ -58,7 +58,7 @@ def train():
         **variant
     )
     model.load_state_dict(dino_state_dict, strict=False)
-    model.linear = nn.Linear(384, config['num_classes'])
+    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
     print(model)

@@ -9,10 +9,14 @@ import utils
 
 import random
 
+import dino_variant
+
+
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', '-d', type=str)
     parser.add_argument('--gpu', '-g', default = '0', type=str)
+    parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
     parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
     args = parser.parse_args()

@@ -10,10 +10,14 @@ import utils
 import random
 import rein
 
+import dino_variant
+
+
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', '-d', type=str)
     parser.add_argument('--gpu', '-g', default = '0', type=str)
+    parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
     parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
     args = parser.parse_args()
@@ -36,27 +40,25 @@ def train():
     elif args.data == 'aptos':
         train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
 
+    if args.netsize == 's':
+        model_load = dino_variant._small_dino
+        variant = dino_variant._small_variant
+    elif args.netsize == 'b':
+        model_load = dino_variant._base_dino
+        variant = dino_variant._base_variant
+    elif args.netsize == 'l':
+        model_load = dino_variant._large_dino
+        variant = dino_variant._large_variant
     # model = timm.create_model(network, pretrained=True, num_classes=2) 
-    model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+    model = torch.hub.load('facebookresearch/dinov2', model_load)
     dino_state_dict = model.state_dict()
 
     model = rein.ReinsDinoVisionTransformer(
-        patch_size=14,
-        embed_dim=384,
-        depth=12,
-        num_heads=6,
-        mlp_ratio=4,
-        img_size=518,
-        ffn_layer="mlp",
-        init_values=1e-05,
-        block_chunks=0,
-        qkv_bias=True,
-        proj_bias=True,
-        ffn_bias=True
+        **variant
     )
     model.load_state_dict(dino_state_dict, strict=False)
-    model.linear = nn.Linear(384, config['num_classes'])
-    model.linear_rein = nn.Linear(384, config['num_classes'])
+    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+    model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
     # print(model.state_dict()['blocks.11.mlp.fc2.weight'])
