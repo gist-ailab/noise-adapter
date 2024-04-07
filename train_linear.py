@@ -39,9 +39,18 @@ def train():
     elif args.data == 'aptos':
         train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
 
-    # model = timm.create_model(network, pretrained=True, num_classes=2) 
-    model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-    model.linear = nn.Linear(384, config['num_classes'])
+    if args.netsize == 's':
+        model_load = dino_variant._small_dino
+        variant = dino_variant._small_variant
+    elif args.netsize == 'b':
+        model_load = dino_variant._base_dino
+        variant = dino_variant._base_variant
+    elif args.netsize == 'l':
+        model_load = dino_variant._large_dino
+        variant = dino_variant._large_variant
+
+    model = torch.hub.load('facebookresearch/dinov2', model_load)
+    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
     
