@@ -48,7 +48,7 @@ def train():
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay = 1e-5)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
-    saver = timm.utils.CheckpointSaver(model.linear, optimizer, checkpoint_dir= save_path, max_history = 1) 
+    saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
     avg_accuracy = 0.0
     for epoch in range(max_epoch):
