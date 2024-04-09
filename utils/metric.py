@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, f1_score
 import sklearn.metrics as sk
 
 import torch.nn.functional as F
@@ -42,6 +42,28 @@ def validation_accuracy(model, loader, device):
     valid_accuracy = correct/total
     return valid_accuracy
 
+def get_f1_score(model, loader, device):
+    y_pred = []
+    y_true = []
+    
+    m = torch.nn.Sigmoid()
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = model(inputs)
+            outputs = model.linear(outputs)
+            outputs = m(outputs) > 0.5
+            #print(outputs.shape)
+            y_pred.extend(outputs.cpu())
+            y_true.extend(targets.cpu())
+    y_pred = torch.stack(y_pred)
+    y_true = torch.stack(y_true)
+    # print(y_pred)
+    f1 = f1_score(y_true, y_pred, average='micro')
+    return f1
+
+
 def validation_accuracy_resnet(model, loader, device):
     total = 0
     correct = 0
@@ -76,6 +98,28 @@ def validation_accuracy_rein(model, loader, device):
             correct += predicted.eq(targets).sum().item()
     valid_accuracy = correct/total
     return valid_accuracy
+
+def get_f1_score_rein(model, loader, device):
+    y_pred = []
+    y_true = []
+    
+    m = torch.nn.Sigmoid()
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features(inputs)
+            features = features[:, 0, :]
+            outputs = model.linear(features)
+            outputs = m(outputs) > 0.5
+            #print(outputs.shape)
+            y_pred.extend(outputs.cpu())
+            y_true.extend(targets.cpu())
+    y_pred = torch.stack(y_pred)
+    y_true = torch.stack(y_true)
+    # print(y_pred)
+    f1 = f1_score(y_true, y_pred, average='micro')
+    return f1
 
 def validation_accuracy_shared(model, loader, device):
     total = 0
