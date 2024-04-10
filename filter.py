@@ -1,65 +1,72 @@
+import os
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import timm
+
 import argparse
-
-from utils import *
-
-
-import torch
-import torch.nn as nn
+import timm
 import numpy as np
+import utils
 
-import models
+import random
 
-def eval():
+import dino_variant
+
+
+def evalaute():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--net','-n', default = 'vit_tiny_patch16_224', type=str)
     parser.add_argument('--data', '-d', type=str)
-    parser.add_argument('--gpu', '-g', type=str)
+    parser.add_argument('--gpu', '-g', default = '0', type=str)
+    parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
-    parser.add_argument('--method' ,'-m', default = 'msp', type=str)
-
     args = parser.parse_args()
 
-    config = read_conf('conf/'+args.data+'.json')
+    config = utils.read_conf('conf/'+args.data+'.json')
     device = 'cuda:'+args.gpu
-    dataset_path = config['id_dataset']
-    batch_size = config['batch_size']
-    save_path = config['save_path'] + args.save_path
-    
-    num_classes = int(config['num_classes'])
+    save_path = os.path.join(config['save_path'], args.save_path)
+    data_path = config['id_dataset']
+    batch_size = int(config['batch_size'])
+    max_epoch = int(config['epoch'])
+    noise_rate = args.noise_rate
 
-    if 'cifar' in args.data:
-        train_loader, valid_loader = get_cifar_noisy(args.data, dataset_path, batch_size, 0.0)
-    else:
-        valid_loader = get_svhn(dataset_path, batch_size)
-        
-    model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)
-    if args.net == 'resnet18':
-        model = models.ResNet18(num_classes=num_classes)
+    if args.data == 'ham10000':
+        train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
+    elif args.data == 'aptos':
+        train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
+    elif args.data == 'nihchest':
+        train_loader, valid_loader = utils.get_nihxray(data_path, batch_size = batch_size)
+    elif args.data == 'idrid':
+        train_loader, valid_loader = utils.get_idrid_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
 
-    if args.net == 'resnet50':
-        model = timm.create_model(args.net, pretrained=True, num_classes=num_classes)  
 
-        
-    if 'wrn40' == args.net:
-        import wrn
-        model = wrn.WideResNet(40, num_classes, 2, 0.3)
-        
-    state_dict = (torch.load(save_path+'/last.pth.tar', map_location = device)['state_dict'])    
-    model.load_state_dict(state_dict)
+    if args.netsize == 's':
+        model_load = dino_variant._small_dino
+        variant = dino_variant._small_variant
+    elif args.netsize == 'b':
+        model_load = dino_variant._base_dino
+        variant = dino_variant._base_variant
+    elif args.netsize == 'l':
+        model_load = dino_variant._large_dino
+        variant = dino_variant._large_variant
+
+    model = torch.hub.load('facebookresearch/dinov2', model_load)
+    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     model.eval()
+    model.load_state_dict(torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict'])
+    
+    total=0
+    correct = 0
+    for batch_idx, (inputs, targets) in enumerate(train_loader):
+        inputs, targets = inputs.to(device), targets.to(device)
+        
+        with torch.no_grad():
+            outputs = model(inputs)
+        outputs = model.linear(outputs)
+        total += targets.size(0)
+        _, predicted = outputs[:len(targets)].max(1)            
+        correct += predicted.eq(targets).sum().item()       
 
-    train_accuracy = validation_accuracy(model, train_loader, device)
-    print('In-distribution accuracy: ', train_accuracy)
-
-    valid_accuracy = validation_accuracy(model, valid_loader, device)
-    print('In-distribution accuracy: ', valid_accuracy)
-
-
+    print(correct/total)    
 
 if __name__ =='__main__':
-    eval()
+    evalaute()
