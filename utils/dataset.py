@@ -28,6 +28,7 @@ def get_transform(transform_type='default', image_size=224, args=None):
         
         train_transform = transforms.Compose([
             transforms.Resize((256, 256)),
+            # transforms.Resize((224, 224)),
             transforms.RandomHorizontalFlip(p=0.5),
             # transforms.RandomVerticalFlip(p=0.5),
             transforms.RandomCrop(size=(image_size, image_size)),

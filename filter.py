@@ -10,6 +10,7 @@ import utils
 import random
 
 import dino_variant
+import rein
 
 
 def evalaute():
@@ -26,7 +27,7 @@ def evalaute():
     data_path = config['id_dataset']
     batch_size = int(config['batch_size'])
     max_epoch = int(config['epoch'])
-    noise_rate = args.noise_rate
+    noise_rate = 0.0
 
     if args.data == 'ham10000':
         train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
@@ -48,11 +49,23 @@ def evalaute():
         model_load = dino_variant._large_dino
         variant = dino_variant._large_variant
 
-    model = torch.hub.load('facebookresearch/dinov2', model_load)
-    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+
+    if 'linear' in args.save_path:
+        model = torch.hub.load('facebookresearch/dinov2', model_load)
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.linear.load_state_dict(torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict'], strict=False)
+    elif 'rein' in args.save_path:
+        model = torch.hub.load('facebookresearch/dinov2', model_load)
+        dino_state_dict = model.state_dict()
+        model = rein.ReinsDinoVisionTransformer(
+            **variant
+        )
+        model.load_state_dict(dino_state_dict, strict=False)
+
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.linear.load_state_dict(torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict'], strict=True) #TEMP
     model.to(device)
     model.eval()
-    model.load_state_dict(torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict'])
     
     total=0
     correct = 0
@@ -60,7 +73,11 @@ def evalaute():
         inputs, targets = inputs.to(device), targets.to(device)
         
         with torch.no_grad():
-            outputs = model(inputs)
+            if type(model).__name__ == 'ReinsDinoVisionTransformer':
+                outputs = model.forward_features(inputs)
+                outputs = outputs[:, 0, :]
+            else:
+                outputs = model(inputs)
         outputs = model.linear(outputs)
         total += targets.size(0)
         _, predicted = outputs[:len(targets)].max(1)            
