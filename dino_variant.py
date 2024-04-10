@@ -27,7 +27,8 @@ _base_variant = dict(
     block_chunks=0,
     qkv_bias=True,
     proj_bias=True,
-    ffn_bias=True
+    ffn_bias=True,
+    out_indices = [7, 11, 14, 17]
 )
 _base_dino = 'dinov2_vitb14'
 

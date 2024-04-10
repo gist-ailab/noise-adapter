@@ -14,6 +14,7 @@ import torchvision
 from .aptos import APTOS2019
 from .chest14 import NIHchestXray
 from .idrid import IDRID
+from .chaoyang import CHAOYANG
 
 def get_transform(transform_type='default', image_size=224, args=None):
 
@@ -24,16 +25,19 @@ def get_transform(transform_type='default', image_size=224, args=None):
         mean = IMAGENET_DEFAULT_MEAN
         std = IMAGENET_DEFAULT_STD
 
+        
         train_transform = transforms.Compose([
-            transforms.Resize((image_size, image_size)),
+            transforms.Resize((256, 256)),
             transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomVerticalFlip(p=0.5),
+            # transforms.RandomVerticalFlip(p=0.5),
+            transforms.RandomCrop(size=(image_size, image_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std)
         ])
 
         test_transform = transforms.Compose([
-            transforms.Resize((image_size, image_size)),
+            transforms.Resize((256, 256)),
+            transforms.CenterCrop((image_size, image_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std)
         ])
@@ -147,6 +151,15 @@ def get_idrid_noise_dataset(path, noise_rate = 0.2, batch_size = 32, seed = 0):
             f.write('{}\n'.format(train_data.samples[i][1]))
 
     valid_data = IDRID(path, train=False, transforms = test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
+def get_chaoyang_dataset(path, batch_size = 32, seed = 0):
+    train_transform, test_transform = get_transform()
+    train_data = CHAOYANG(path, train=True, transforms = train_transform)
+    valid_data = CHAOYANG(path, train=False, transforms = test_transform)
     
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
     valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)

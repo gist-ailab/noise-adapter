@@ -30,6 +30,27 @@ class ReinsDinoVisionTransformer(DinoVisionTransformer):
             )
         return x
 
+    def forward_features_full_rein(self, x, masks=None):
+        B, _, h, w = x.shape
+        H, W = h // self.patch_size, w // self.patch_size
+        x = self.prepare_tokens_with_masks(x, masks)
+        outs = []
+        for idx, blk in enumerate(self.blocks):
+            x = blk(x)
+            x = self.reins.forward(
+                x,
+                idx,
+                batch_first=True,
+                has_cls_token=True,
+            )
+            if idx in self.out_indices:
+                outs.append(
+                    x[:, 1:, :].permute(0, 2, 1).reshape(B, -1, H, W).contiguous()
+                )
+        return self.reins.return_auto(outs)
+
+
+
     def forward_features_no_rein(self, x, masks=None):
         B, _, h, w = x.shape
         H, W = h // self.patch_size, w // self.patch_size
