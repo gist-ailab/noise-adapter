@@ -128,7 +128,7 @@ def get_aptos_noise_dataset(path, noise_rate = 0.2, batch_size = 32, seed = 0):
 
 def get_mnist_noise_dataset(dataname, noise_rate = 0.2, batch_size = 32, seed = 0):
     # from medmnist import NoduleMNIST3D
-    from medmnist import PathMNIST, BloodMNIST, OCTMNIST, TissueMNIST
+    from medmnist import PathMNIST, BloodMNIST, OCTMNIST, TissueMNIST, OrganCMNIST
     train_transform, test_transform = get_transform()
 
     if dataname == 'pathmnist':
@@ -142,11 +142,15 @@ def get_mnist_noise_dataset(dataname, noise_rate = 0.2, batch_size = 32, seed = 
     if dataname == 'octmnist':
         train_data = OCTMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
         test_data = OCTMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
-        num_classes = 11
+        num_classes = 4
     if dataname == 'tissuemnist':
         train_data = TissueMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
         test_data = TissueMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
         num_classes = 8
+    if dataname == 'organcmnist':
+        train_data = OrganCMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = OrganCMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 11
 
     np.random.seed(seed)
     # new_imgs = []
