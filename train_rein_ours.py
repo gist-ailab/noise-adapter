@@ -43,7 +43,9 @@ def train():
         train_loader, valid_loader = utils.get_idrid_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'chaoyang':
         train_loader, valid_loader = utils.get_chaoyang_dataset(data_path, batch_size = batch_size)
-
+    elif 'mnist' in args.data:
+        train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
+        
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
@@ -70,7 +72,7 @@ def train():
     model.eval()
     
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay = 1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)

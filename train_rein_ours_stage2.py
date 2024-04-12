@@ -13,6 +13,9 @@ import rein
 import dino_variant
 
 
+def symmetric_cross_entropy(x, x_ema):# -> torch.Tensor:
+    return -0.5*(x_ema.softmax(1) * x.log_softmax(1)).sum(1)-0.5*(x.softmax(1) * x_ema.log_softmax(1)).sum(1)
+
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', '-d', type=str)
@@ -45,6 +48,8 @@ def train():
         train_loader, valid_loader = utils.get_idrid_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'chaoyang':
         train_loader, valid_loader = utils.get_chaoyang_dataset(data_path, batch_size = batch_size)
+    elif 'mnist' in args.data:
+        train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino

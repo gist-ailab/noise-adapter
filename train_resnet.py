@@ -37,7 +37,9 @@ def train():
         train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'idrid':
         train_loader, valid_loader = utils.get_idrid_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
-
+    elif 'mnist' in args.data:
+        train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
+        
     model = timm.create_model('resnet101', pretrained = False, num_classes = config['num_classes'])
     model.to(device)
     

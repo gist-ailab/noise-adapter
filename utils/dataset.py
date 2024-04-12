@@ -31,6 +31,7 @@ def get_transform(transform_type='default', image_size=224, args=None):
             # transforms.Resize((224, 224)),
             transforms.RandomHorizontalFlip(p=0.5),
             # transforms.RandomVerticalFlip(p=0.5),
+            # transforms.ColorJitter(),
             transforms.RandomCrop(size=(image_size, image_size)),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std)
@@ -124,6 +125,60 @@ def get_aptos_noise_dataset(path, noise_rate = 0.2, batch_size = 32, seed = 0):
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
     valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
+
+def get_mnist_noise_dataset(dataname, noise_rate = 0.2, batch_size = 32, seed = 0):
+    # from medmnist import NoduleMNIST3D
+    from medmnist import PathMNIST, BloodMNIST, OCTMNIST, TissueMNIST
+    train_transform, test_transform = get_transform()
+
+    if dataname == 'pathmnist':
+        train_data = PathMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = PathMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 9
+    if dataname == 'bloodmnist':
+        train_data = BloodMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = BloodMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 8
+    if dataname == 'octmnist':
+        train_data = OCTMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = OCTMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 11
+    if dataname == 'tissuemnist':
+        train_data = TissueMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = TissueMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 8
+
+    np.random.seed(seed)
+    # new_imgs = []
+    new_labels =[]
+    for i in range(len(train_data.imgs)):
+        if np.random.rand() > noise_rate: # clean sample:
+            # new_imgs.append(train_data.imgs[i])
+            new_labels.append(train_data.labels[i][0])
+        else:
+            label_index = list(range(num_classes))
+            label_index.remove(train_data.labels[i])
+            label_index = np.array(label_index)
+            label_index = np.reshape(label_index, (-1))
+
+            new_label = np.random.choice(label_index, 1)
+            new_label = new_label[0]
+            
+            # new_imgs.append(train_data.imgs[i])
+            new_labels.append(new_label)
+    # train_data.imgs = new_imgs
+    train_data.labels = new_labels
+
+    new_labels = []
+    for i in range(len(test_data.labels)):
+        new_labels.append(test_data.labels[i][0])
+    test_data.labels = new_labels
+
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
 
 def get_idrid_noise_dataset(path, noise_rate = 0.2, batch_size = 32, seed = 0):
     train_transform, test_transform = get_transform()

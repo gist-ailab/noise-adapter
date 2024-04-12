@@ -45,6 +45,9 @@ def train():
         train_loader, valid_loader = utils.get_idrid_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'chaoyang':
         train_loader, valid_loader = utils.get_chaoyang_dataset(data_path, batch_size = batch_size)
+    elif 'mnist' in args.data:
+        train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
+
 
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -69,9 +72,6 @@ def train():
     
     print(model)
     criterion = torch.nn.CrossEntropyLoss()
-    if args.data == 'nihchest':
-        criterion = torch.nn.BCELoss()
-        m = nn.Sigmoid()
     model.eval()
     
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
@@ -80,6 +80,7 @@ def train():
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
 
+    # f = open(os.path.join(save_path, 'epoch_acc.txt'), 'w')
     avg_accuracy = 0.0
     for epoch in range(max_epoch):
         ## training
@@ -94,25 +95,17 @@ def train():
             features = model.forward_features(inputs)
             features = features[:, 0, :]
             outputs = model.linear(features)
-            if args.data == 'nihchest':
-                outputs = m(outputs)
             loss = criterion(outputs, targets)
             loss.backward()            
             optimizer.step()
 
             total_loss += loss
             total += targets.size(0)
-            if not args.data == 'nihchest':
-                _, predicted = outputs[:len(targets)].max(1)            
-                correct += predicted.eq(targets).sum().item()            
-                print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                            % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')
-                train_accuracy = correct/total
-            else:
-                f1 = f1_score(targets.cpu(), outputs.cpu().detach()>0.5, average = 'micro')
-                print('\r', batch_idx, len(train_loader), 'Loss: %.3f | F1: %.3f%%'
-                            % (total_loss/(batch_idx+1), 100.*f1), end = '')          
-                train_accuracy = f1
+            _, predicted = outputs[:len(targets)].max(1)            
+            correct += predicted.eq(targets).sum().item()            
+            print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                        % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')
+            train_accuracy = correct/total
                   
         train_avg_loss = total_loss/len(train_loader)
         print()
@@ -123,10 +116,7 @@ def train():
         total = 0
         correct = 0
 
-        if args.data == 'nihchest':
-            valid_accuracy = utils.get_f1_score_rein(model, valid_loader, device)
-        else:
-            valid_accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
         scheduler.step()
