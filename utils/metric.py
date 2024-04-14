@@ -7,6 +7,40 @@ import torch.nn.functional as F
 
 recall_level_default = 0.95
 
+def get_AUC_of_trainingset(model, train_loader, clean_loader, device):
+    total_clean = 0
+    correct_clean = 0
+    total_noise = 0
+    correct_noise = 0   
+
+    model.eval()
+    train_set = train_loader.dataset
+    clean_set = clean_loader.dataset
+    with torch.no_grad():
+        for batch_idx, (traindata, cleandata) in enumerate(zip(train_set, clean_set)):
+            inputs, targets = traindata
+            _, true_targets = cleandata
+            
+            inputs, targets, true_targets = inputs.to(device), targets.to(device), true_targets.to(device)
+
+            outputs = model(inputs)
+            outputs = model.linear(outputs)
+            
+            _, predicted = outputs.max(1)  
+
+            if targets == true_targets:
+                # Clean
+                total_clean += 1
+                if predicted == true_targets:
+                    correct_clean+=1
+            else:
+                # Noise
+                total_noise += 1
+                if predicted == true_targets:
+                    correct_noise+=1  
+    print(total_clean, correct_clean, correct_clean/total_clean)
+    print(total_noise, correct_noise, correct_noise/total_noise)
+    return 
 
 
 def validation_accuracy(model, loader, device):
