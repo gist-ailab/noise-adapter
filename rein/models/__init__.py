@@ -1,3 +1,1 @@
-from .backbones import *
-from .heads import *
-from .segmentors import *
+from .backbones import ReinsDinoVisionTransformer

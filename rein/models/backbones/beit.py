@@ -17,9 +17,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as cp
-from mmseg.models.builder import BACKBONES
+# from mmseg.models.builder import BACKBONES
 
-from mmengine.logging import MMLogger
+# from mmengine.logging import MMLogger
 from timm.models.layers import drop_path, to_2tuple, trunc_normal_
 
 # Copyright (c) Open-MMLab. All rights reserved.

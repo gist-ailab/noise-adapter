@@ -1,6 +1,6 @@
 import torch.nn as nn
 from typing import List
-from mmengine.logging import MMLogger
+# from mmengine.logging import MMLogger
 
 first_set_requires_grad = True
 first_set_train = True
@@ -22,14 +22,14 @@ def set_requires_grad(model: nn.Module, keywords: List[str]):
         else:
             param.requires_grad = False
     global first_set_requires_grad
-    if first_set_requires_grad:
-        logger = MMLogger.get_current_instance()
-        for name in requires_grad_names:
-            logger.info(f"set_requires_grad----{name}")
-        logger.info(
-            f"Total trainable params--{num_trainable}, All params--{num_params}, Ratio--{num_trainable*100/num_params:.1f}%"
-        )
-        first_set_requires_grad = False
+    # if first_set_requires_grad:
+    #     # logger = MMLogger.get_current_instance()
+    #     for name in requires_grad_names:
+    #         logger.info(f"set_requires_grad----{name}")
+    #     logger.info(
+    #         f"Total trainable params--{num_trainable}, All params--{num_params}, Ratio--{num_trainable*100/num_params:.1f}%"
+    #     )
+    #     first_set_requires_grad = False
 
 
 def _set_train(model: nn.Module, keywords: List[str], prefix: str = ""):
@@ -50,9 +50,9 @@ def set_train(model: nn.Module, keywords: List[str]):
     """
     model.train(False)
     train_names = _set_train(model, keywords)
-    global first_set_train
-    if first_set_train:
-        logger = MMLogger.get_current_instance()
-        for train_name in train_names:
-            logger.info(f"set_train----{train_name}")
-        first_set_train = False
+    # global first_set_train
+    # if first_set_train:
+    #     logger = MMLogger.get_current_instance()
+    #     for train_name in train_names:
+    #         logger.info(f"set_train----{train_name}")
+        # first_set_train = False
