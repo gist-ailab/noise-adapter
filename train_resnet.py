@@ -40,7 +40,7 @@ def train():
     elif 'mnist' in args.data:
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
         
-    model = timm.create_model('resnet101', pretrained = False, num_classes = config['num_classes'])
+    model = timm.create_model('resnet101', pretrained = True, num_classes = config['num_classes'])
     model.to(device)
     
     
@@ -48,7 +48,7 @@ def train():
     model.eval()
     
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-1, weight_decay = 1e-5)
+    optimizer = torch.optim.Adam(model.fc.parameters(), lr=1e-3, weight_decay = 1e-5)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
@@ -64,7 +64,11 @@ def train():
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             
-            outputs = model(inputs)
+            # outputs = model(inputs)
+            with torch.no_grad():
+                features = model.forward_features(inputs)
+                features = model.global_pool(features)
+            outputs = model.fc(features)
             # outputs = model.linear(outputs)
             
             loss = criterion(outputs, targets)
