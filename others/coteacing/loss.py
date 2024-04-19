@@ -7,7 +7,7 @@ import numpy as np
 from numpy.testing import assert_array_almost_equal
 
 # Loss functions
-def loss_coteaching(y_1, y_2, t, forget_rate, ind, noise_or_not):
+def loss_coteaching(y_1, y_2, t, forget_rate):
     loss_1 = F.cross_entropy(y_1, t, reduction='none')
     ind_1_sorted = np.argsort(loss_1.cpu().data).cuda()
     loss_1_sorted = loss_1[ind_1_sorted]
@@ -26,8 +26,8 @@ def loss_coteaching(y_1, y_2, t, forget_rate, ind, noise_or_not):
         ind_2_update = ind_2_sorted.cpu().numpy()
         num_remember = ind_1_update.shape[0]
 
-    pure_ratio_1 = np.sum(noise_or_not[ind[ind_1_update]])/float(num_remember)
-    pure_ratio_2 = np.sum(noise_or_not[ind[ind_2_update]])/float(num_remember)
+    # pure_ratio_1 = np.sum(noise_or_not[ind[ind_1_update]])/float(num_remember)
+    # pure_ratio_2 = np.sum(noise_or_not[ind[ind_2_update]])/float(num_remember)
 
     loss_1_update = F.cross_entropy(y_1[ind_2_update], t[ind_2_update])
     loss_2_update = F.cross_entropy(y_2[ind_1_update], t[ind_1_update])
