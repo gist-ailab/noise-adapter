@@ -84,7 +84,6 @@ def train():
 
 
     loss_coteaching = coteaching.loss_coteaching
-    loss_coteaching_plus = coteaching.loss_coteaching_plus
 
     scheduler1 = torch.optim.lr_scheduler.MultiStepLR(optimizer1, lr_decay)
     scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer2, lr_decay)
@@ -92,10 +91,10 @@ def train():
     saver = timm.utils.CheckpointSaver(model, optimizer1, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
 
-    init_epoch = 20
     num_gradual = 10
+    exponent = 1 # 0.5, 1 or 2; This parameter is equal to c in Tc for R(T) in Co-teaching paper.
     rate_schedule = np.ones(max_epoch) * noise_rate
-    rate_schedule[:num_gradual] = np.linspace(0, noise_rate, num_gradual)
+    rate_schedule[:num_gradual] = np.linspace(0, noise_rate ** exponent, num_gradual)
 
     avg_accuracy = 0.0
     for epoch in range(max_epoch):
@@ -118,11 +117,7 @@ def train():
             features2 = features2[:, 0, :]
             outputs2 = model2.linear(features2)
 
-            if epoch < init_epoch:
-                loss_1, loss_2 = loss_coteaching(outputs1, outputs2, targets, rate_schedule[epoch])
-                # print(outputs1.shape)
-            else:
-                loss_1, loss_2 = loss_coteaching_plus(outputs1, outputs2, targets, rate_schedule[epoch], epoch*batch_idx)
+            loss_1, loss_2 = loss_coteaching(outputs1, outputs2, targets, rate_schedule[epoch])
             optimizer1.zero_grad()
             loss_1.backward(retain_graph=True)
             optimizer1.step()

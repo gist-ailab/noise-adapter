@@ -226,13 +226,55 @@ def get_chaoyang_dataset(path, batch_size = 32, seed = 0):
     return train_loader, valid_loader
 
 
-def get_nihxray(path, batch_size = 32):
+def get_nihxray(batch_size = 32):
+    from medmnist import ChestMNIST
+
     train_transform, test_transform = get_transform()
-    train_data = NIHchestXray(path, train=True, transforms = train_transform)
-    valid_data = NIHchestXray(path, train=False, transforms = train_transform)
+
+    def __modify_len__(self):
+        return self.imgs.shape[0]
+    ChestMNIST.__len__ = __modify_len__
+    train_data = ChestMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+    test_data = ChestMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+
+    # print(train_data.imgs)
+    # print(train_data.labels)
+    multi2single = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ,13 ,14]
+
+    imgs = []
+    labels = []
+    for i in range(len(train_data.imgs)):
+        if (train_data.labels[i] != 0).sum() > 1:
+            pass
+        else:
+            imgs.append([train_data.imgs[i]])
+            label = ((train_data.labels[i] != 0) * multi2single).sum()
+            labels.append([label])
+    train_data.imgs = np.concatenate(imgs)
+    train_data.labels = np.concatenate(labels)
+    
+    # print(train_data.imgs.shape)
+    # print(train_data.labels.shape)
+
+
+    imgs = []
+    labels = []
+    for i in range(len(test_data.imgs)):
+        if (test_data.labels[i] != 0).sum() > 1:
+            pass
+        else:
+            imgs.append([test_data.imgs[i]])
+            label = ((test_data.labels[i] != 0) * multi2single).sum()
+            labels.append([label])
+    test_data.imgs = np.concatenate(imgs)
+    test_data.labels = np.concatenate(labels)
+
+    # print(test_data.imgs.shape)
+    # print(test_data.labels.shape)
+    # print(test_data)
 
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
-    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    valid_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
     
 if __name__ == '__main__':
