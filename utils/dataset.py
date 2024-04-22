@@ -15,6 +15,7 @@ from .aptos import APTOS2019
 from .chest14 import NIHchestXray
 from .idrid import IDRID
 from .chaoyang import CHAOYANG
+from .dr import DR
 
 def get_transform(transform_type='default', image_size=224, args=None):
 
@@ -225,6 +226,15 @@ def get_chaoyang_dataset(path, batch_size = 32, seed = 0):
     valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
+def get_dr(path, batch_size = 32):
+    train_transform, test_transform = get_transform()
+
+    train_data = DR(path, train=True, transforms = train_transform)
+    valid_data = APTOS2019('./data/APTOS-2019', train=False, transforms = test_transform)
+
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
 
 def get_nihxray(batch_size = 32):
     from medmnist import ChestMNIST
@@ -278,4 +288,4 @@ def get_nihxray(batch_size = 32):
     return train_loader, valid_loader
     
 if __name__ == '__main__':
-    pass
+    get_nihxray()

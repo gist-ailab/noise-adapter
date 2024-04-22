@@ -47,7 +47,8 @@ def train():
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'chaoyang':
         train_loader, valid_loader = utils.get_chaoyang_dataset(data_path, batch_size = batch_size)
-
+    elif args.data == 'dr':
+        train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
 
     if args.netsize == 's':
         model_load = dino_variant._small_dino
