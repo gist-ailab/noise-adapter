@@ -45,6 +45,8 @@ def train():
         train_loader, valid_loader = utils.get_chaoyang_dataset(data_path, batch_size = batch_size)
     elif 'mnist' in args.data:
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
+    elif args.data == 'nihxray':
+        train_loader, valid_loader = utils.get_nihxray(batch_size = batch_size)
     elif args.data == 'dr':
         train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
         
