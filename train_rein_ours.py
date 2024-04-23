@@ -79,6 +79,7 @@ def train():
 
 
     avg_accuracy = 0.0
+    avg_kappa = 0.0
     for epoch in range(max_epoch):
         ## training
         model.train()
@@ -137,11 +138,14 @@ def train():
         scheduler.step()
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
+            kappa =  utils.validation_kohen_kappa_ours(model, valid_loader, device)
+            avg_kappa += kappa
         saver.save_checkpoint(epoch, metric = valid_accuracy)
         print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID [acc - {:.4f}], VALID(linear) [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy, valid_accuracy_linear))
         print(scheduler.get_last_lr())
     with open(os.path.join(save_path, 'avgacc.txt'), 'w') as f:
         f.write(str(avg_accuracy/10))
-        
+        f.write('|')
+        f.write(str(avg_kappa/10))
 if __name__ =='__main__':
     train()

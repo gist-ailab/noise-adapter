@@ -93,6 +93,7 @@ def train():
     # print(ra)
 
     avg_accuracy = 0.0
+    avg_kappa = 0.0
     for epoch in range(max_epoch):
         ## training
         model1.train()
@@ -139,7 +140,9 @@ def train():
 
         valid_accuracy = utils.validation_accuracy_rein(model1, valid_loader, device)
         if epoch >= max_epoch-10:
-            avg_accuracy += valid_accuracy 
+            avg_accuracy += valid_accuracy
+            kappa =  utils.validation_kohen_kappa(model1, valid_loader, device)
+            avg_kappa += kappa
         scheduler.step()
 
         saver.save_checkpoint(epoch, metric = valid_accuracy)
@@ -148,6 +151,8 @@ def train():
 
     with open(os.path.join(save_path, 'avgacc.txt'), 'w') as f:
         f.write(str(avg_accuracy/10))
+        f.write('|')
+        f.write(str(avg_kappa/10))
     
 if __name__ =='__main__':
     train()

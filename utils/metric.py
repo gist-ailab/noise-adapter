@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 recall_level_default = 0.95
 
-def validation_kohen_kappa(model, loader, device):
+def validation_kohen_kappa_ours(model, loader, device):
     targets_list = []
     preds_list = []
     model.eval()
@@ -16,7 +16,7 @@ def validation_kohen_kappa(model, loader, device):
             inputs, targets = inputs.to(device), targets.to(device)
             features = model.forward_features(inputs)
             features = features[:, 0, :]
-            outputs = model.linear(features) # should be changed to linear_rein for reinfn
+            outputs = model.linear_rein(features) # should be changed to linear_rein for reinfn
             pred = outputs.max(1).indices
 
             targets_list.append(targets.cpu().view(-1))
