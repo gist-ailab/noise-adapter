@@ -77,13 +77,18 @@ def train():
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
     model.eval()
     
-    if 'rein' in args.save_path:
+    if 'ours' in args.save_path:
+        kappa_score = utils.validation_kohen_kappa_ours(model, valid_loader, device)
+        accuracy = utils.validation_accuracy_ours(model, valid_loader, device)
+    elif 'rein' in args.save_path:
         kappa_score = utils.validation_kohen_kappa(model, valid_loader, device)
+        accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
     else:
         # Linear or full
+        accuracy = utils.validation_accuracy(model, valid_loader, device)
         kappa_score = utils.validation_kohen_kappa_linear(model, valid_loader, device)
 
-    print(kappa_score)
+    print(accuracy, kappa_score)
 
         
 if __name__ =='__main__':
