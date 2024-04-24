@@ -29,6 +29,29 @@ def validation_kohen_kappa_ours(model, loader, device):
     kappa = cohen_kappa_score(targets_list.numpy(), preds_list.numpy(), weights = 'quadratic')
     return kappa
 
+def validation_kohen_kappa(model, loader, device):
+    targets_list = []
+    preds_list = []
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features(inputs)
+            features = features[:, 0, :]
+            outputs = model.linear(features) # should be changed to linear_rein for reinfn
+            pred = outputs.max(1).indices
+
+            targets_list.append(targets.cpu().view(-1))
+            preds_list.append(pred.cpu().view(-1))
+            # print(batch_idx, pred.cpu().view(-1))
+    targets_list = torch.cat(targets_list)
+    preds_list = torch.cat(preds_list)
+    print(targets_list.shape, preds_list.shape)
+
+    kappa = cohen_kappa_score(targets_list.numpy(), preds_list.numpy(), weights = 'quadratic')
+    return kappa
+
+
 def validation_kohen_kappa_linear(model, loader, device):
     targets_list = []
     preds_list = []
