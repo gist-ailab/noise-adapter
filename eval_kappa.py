@@ -30,10 +30,6 @@ def train():
     max_epoch = int(config['epoch'])
     noise_rate = args.noise_rate
 
-    if not os.path.exists(save_path):
-        os.mkdir(save_path)
-
-    lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
     if args.data == 'ham10000':
         train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)

@@ -89,7 +89,7 @@ def train():
     scheduler1 = torch.optim.lr_scheduler.MultiStepLR(optimizer1, lr_decay)
     scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer2, lr_decay)
 
-    saver = timm.utils.CheckpointSaver(model, optimizer1, checkpoint_dir= save_path, max_history = 1) 
+    saver = timm.utils.CheckpointSaver(model1, optimizer1, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
 
     num_gradual = 10
