@@ -86,8 +86,11 @@ def train():
     model2.eval()
 
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer = torch.optim.Adam(list(model.parameters()) + list(model2.parameters()), lr=1e-3, weight_decay = 1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
+    optimizer2 = torch.optim.Adam(model2.parameters(), lr=1e-3, weight_decay = 1e-5)
+
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
+    scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer2, lr_decay)
     saver = timm.utils.CheckpointSaver(model2, optimizer, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
 
@@ -131,10 +134,13 @@ def train():
             loss_rein = linear_accurate*criterion(outputs, targets)
             loss_rein2 = linear_accurate2*criterion(outputs2, targets)
             loss_linear = criterion(outputs_, targets)
-            loss = loss_rein.mean() + loss_linear.mean() + loss_rein2.mean()
+            loss = loss_linear.mean()+loss_rein.mean()#+ loss_rein2.mean()
             loss.backward()            
             optimizer.step() # + outputs_
 
+            optimizer2.zero_grad()
+            loss_rein2.mean().backward()
+            optimizer2.step()
 
             total_loss += loss
             total += targets.size(0)
@@ -164,6 +170,7 @@ def train():
         valid_accuracy_linear = utils.validation_accuracy_linear(model, valid_loader, device)
         
         scheduler.step()
+        scheduler2.step()
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
             kappa =  utils.validation_kohen_kappa_ours(model2, valid_loader, device)
