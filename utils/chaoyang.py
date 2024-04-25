@@ -19,7 +19,8 @@ class CHAOYANG():
         
         self.label_txt = os.path.join(root_dir, 'train.json' if train else 'test.json')
 
-        self.samples = []
+        self.imgs = []
+        self.labels = []
         with open(self.label_txt, 'r') as f:
             load_list = json.load(f)
 
@@ -27,19 +28,22 @@ class CHAOYANG():
                 img_path = os.path.join(root_dir, load_list[i]["name"])
                 label = (load_list[i]["label"])
                 
-                self.samples.append([img_path, label])
+                # self.samples.append([img_path, label])
+                self.imgs.append(img_path)
+                self.labels.append(label)
 
     def __len__(self):
-        return len(self.samples)
+        return len(self.imgs)
 
     def __getitem__(self, idx):
-        sample, label = self.samples[idx]
-        sample = Image.open(sample)
+        # sample, label = self.samples[idx]
+        img, label = self.imgs[idx], self.labels[idx]
+        img = Image.open(img)
 
         if self.transform:
-            sample = self.transform(sample)
+            img = self.transform(img)
 
-        return sample, label
+        return img, label
     
 if __name__ == '__main__':
     aptos = CHAOYANG('./data/chaoyang-data', True)
