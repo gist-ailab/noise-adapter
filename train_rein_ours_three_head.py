@@ -47,6 +47,14 @@ def train():
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'dr':
         train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
+    
+    
+    num_samples = {}
+    for i in range(config['num_classes']):
+        num_samples[i] = 0
+    for sample in train_loader.dataset:
+        num_samples[sample[1]]+=1
+    print(num_samples)
 
         
     if args.netsize == 's':
@@ -89,8 +97,10 @@ def train():
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
     optimizer2 = torch.optim.Adam(model2.parameters(), lr=1e-3, weight_decay = 1e-5)
 
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
-    scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer2, lr_decay)
+    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
+    # scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer2, lr_decay)
+    scheduler2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer2, T_max=20)
     saver = timm.utils.CheckpointSaver(model2, optimizer, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
 
