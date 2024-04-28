@@ -17,6 +17,63 @@ from .idrid import IDRID
 from .chaoyang import CHAOYANG
 from .dr import DR
 
+class ImageFolderTwoLabel(torchvision.datasets.ImageFolder):
+    def __getitem__(self, index: int):
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (sample, target) where target is class_index of the target class.
+        """
+        path, target = self.samples[index]
+        sample = self.loader(path)
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        clean_label = self.ori_labels[index]
+
+        return sample, target, clean_label
+    
+def get_noise_dataset_with_cleanlabel(path, noise_rate = 0.2, batch_size = 32, seed = 0):
+    train_transform, test_transform = get_transform()
+    train_data = ImageFolderTwoLabel(path + '/train', train_transform)
+    np.random.seed(seed)
+    
+    new_data = []
+    ori_labels = []
+    for i in range(len(train_data.samples)):
+        ori_labels.append(train_data.samples[i][1])
+        if np.random.rand() > noise_rate: # clean sample:
+            new_data.append([train_data.samples[i][0], train_data.samples[i][1]])
+        else:
+            label_index = list(range(7))
+            label_index.remove(train_data.samples[i][1])
+            label_index = np.array(label_index)
+            label_index = np.reshape(label_index, (-1))
+
+            new_label = np.random.choice(label_index, 1)
+            new_label = new_label[0]
+            
+            new_data.append([train_data.samples[i][0], new_label])
+    train_data.samples = new_data
+    train_data.ori_labels = ori_labels
+
+    # Testing
+    with open('label.txt', 'w') as f:
+        for i in range(len(train_data.samples)):
+            f.write('{}\n'.format(train_data.samples[i][1]))
+
+    valid_data = torchvision.datasets.ImageFolder(path + '/test', test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 8)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
+
+
+
 def get_transform(transform_type='default', image_size=224, args=None):
 
     if transform_type == 'default':

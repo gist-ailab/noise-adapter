@@ -57,3 +57,27 @@ def loss_codis(y_1, y_2, t, forget_rate, co_lambda=0.1):
     loss_2_update = loss_2[ind_1_update]
     
     return torch.sum(loss_1_update)/num_remember, torch.sum(loss_2_update)/num_remember
+
+def loss_codis_clean(y_1, y_2, t, forget_rate, co_lambda=0.1):
+    loss_1 = F.cross_entropy(y_1, t, reduction='none') - co_lambda * js_loss_compute(y_1, y_2,reduce=False)
+    ind_1_sorted = np.argsort(loss_1.cpu().data).cuda()
+    loss_1_sorted = loss_1[ind_1_sorted]
+
+    loss_2 = F.cross_entropy(y_2, t, reduction='none') - co_lambda * js_loss_compute(y_1, y_2,reduce=False)
+    ind_2_sorted = np.argsort(loss_2.cpu().data).cuda()
+    loss_2_sorted = loss_2[ind_2_sorted]
+
+    remember_rate = 1 - forget_rate
+    num_remember = int(remember_rate * len(loss_1_sorted))
+
+    ind_1_update=ind_1_sorted[:num_remember].cpu()
+    ind_2_update=ind_2_sorted[:num_remember].cpu()
+    if len(ind_1_update) == 0:
+        ind_1_update = ind_1_sorted.cpu().numpy()
+        ind_2_update = ind_2_sorted.cpu().numpy()
+        num_remember = ind_1_update.shape[0]
+
+    loss_1_update = loss_1[ind_2_update]
+    loss_2_update = loss_2[ind_1_update]
+    
+    return torch.sum(loss_1_update)/num_remember, torch.sum(loss_2_update)/num_remember, ind_2_update

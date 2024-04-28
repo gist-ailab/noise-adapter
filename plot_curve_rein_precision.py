@@ -10,6 +10,8 @@ import utils
 import random
 import rein
 
+from sklearn.metrics import f1_score
+
 import dino_variant
 
 
@@ -36,39 +38,12 @@ def train():
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
     if args.data == 'ham10000':
-        train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
-    elif args.data == 'aptos':
-        train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
-    elif args.data == 'idrid':
-        train_loader, valid_loader = utils.get_idrid_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
-    elif args.data == 'chaoyang':
-        train_loader, valid_loader = utils.get_chaoyang_dataset(data_path, batch_size = batch_size)
-    elif 'mnist' in args.data:
-        train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
-    elif args.data == 'dr':
-        train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
-    
-    
-    num_samples = {}
-    for i in range(config['num_classes']):
-        num_samples[i] = 0
-    for sample in train_loader.dataset:
-        num_samples[sample[1]]+=1
-    print(num_samples)
-    
-    class_weight = torch.tensor([sum(num_samples.values())/num_samples[x] for x in num_samples])
-    print(class_weight)
-        
+        train_loader, valid_loader = utils.get_noise_dataset_with_cleanlabel(data_path, noise_rate=noise_rate, batch_size = batch_size)
+
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
-    elif args.netsize == 'b':
-        model_load = dino_variant._base_dino
-        variant = dino_variant._base_variant
-    elif args.netsize == 'l':
-        model_load = dino_variant._large_dino
-        variant = dino_variant._large_variant
-    # model = timm.create_model(network, pretrained=True, num_classes=2) 
+
     model = torch.hub.load('facebookresearch/dinov2', model_load)
     dino_state_dict = model.state_dict()
 
@@ -80,10 +55,9 @@ def train():
     model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
-    # print(model.state_dict()['blocks.11.mlp.fc2.weight'])
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
     model.eval()
-    
+
     model2 = rein.ReinsDinoVisionTransformer(
         **variant
     )
@@ -101,23 +75,40 @@ def train():
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer2, lr_decay)
-    saver = timm.utils.CheckpointSaver(model2, optimizer, checkpoint_dir= save_path, max_history = 1) 
+
     print(train_loader.dataset[0][0].shape)
 
-    avg_accuracy = 0.0
-    avg_kappa = 0.0
+    f_pre_a = open(os.path.join(save_path, 'train_pre_adapter.txt'), 'w')
+    f_pre_l = open(os.path.join(save_path, 'train_pre_linear.txt'), 'w')
+
+    f_rec_a = open(os.path.join(save_path, 'train_rec_adapter.txt'), 'w')
+    f_rec_l = open(os.path.join(save_path, 'train_rec_linear.txt'), 'w')
+
+    f_acc_lp = open(os.path.join(save_path, 'test_lp.txt'), 'w')
+    f_acc_ia = open(os.path.join(save_path, 'test_ia.txt'), 'w')
+    f_acc_la = open(os.path.join(save_path, 'test_la.txt'), 'w')
+
     for epoch in range(max_epoch):
         ## training
         model.train()
         model2.train()
         total_loss = 0
+
         total = 0
         correct = 0
-        correct2 = 0
-        correct_linear = 0
-        for batch_idx, (inputs, targets) in enumerate(train_loader):
-            inputs, targets = inputs.to(device), targets.to(device)
+
+        tpfp = 0
+        tp = 0
+        tpfn = 0
+
+        tpfp2 = 0
+        tp2 = 0
+        tpfn2 = 0
+
+        for batch_idx, (inputs, targets, cleans) in enumerate(train_loader):
+            inputs, targets, cleans = inputs.to(device), targets.to(device), cleans.to(device)
             optimizer.zero_grad()
+            
             
             features_rein = model.forward_features(inputs)
             features_rein = features_rein[:, 0, :]
@@ -132,14 +123,24 @@ def train():
                 features_ = model.forward_features_no_rein(inputs)
                 features_ = features_[:, 0, :]
             outputs_ = model.linear(features_)
-            # print(outputs.shape, outputs_.shape)
 
             with torch.no_grad():
                 pred = (outputs_).max(1).indices
-                linear_accurate = (pred==targets)
+                linear_accurate = (pred==targets) # Prediction on training set (TP+FP) (1 for Clean)
+                true_accurate = (cleans==targets) # Clean or Noise () (1 for Clean)
+                correct_accurate = (linear_accurate & true_accurate) # TP
+                tpfp += linear_accurate.sum()
+                tp += correct_accurate.sum()
+                tpfn += true_accurate.sum()
 
                 pred2 = outputs.max(1).indices
-                linear_accurate2 = (pred2==targets)
+                linear_accurate2 = (pred2==targets) # Prediction on training set (TP2+FP2)
+                correct_accurate2 = (linear_accurate2 & true_accurate) # TP2
+                tpfp2 += linear_accurate2.sum()
+                tp2 += correct_accurate2.sum()
+                tpfn2 += true_accurate.sum()
+            
+
 
             loss_rein = linear_accurate*criterion(outputs, targets)
             loss_rein2 = linear_accurate2*criterion(outputs2, targets)
@@ -155,18 +156,22 @@ def train():
             total_loss += loss
             total += targets.size(0)
             _, predicted = outputs[:len(targets)].max(1)            
-            correct += predicted.eq(targets).sum().item()       
-
-            _, predicted = outputs2[:len(targets)].max(1)            
-            correct2 += predicted.eq(targets).sum().item()   
-
-            _, predicted = outputs_[:len(targets)].max(1)            
-            correct_linear += predicted.eq(targets).sum().item()   
-            print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc2: %.3f%% | Acc1: %.3f%% | LinearAcc: %.3f%% | (%d/%d)'
-                        % (total_loss/(batch_idx+1), 100.*correct2/total, 100.*correct/total, 100.*correct_linear/total, correct, total), end = '')                       
+            correct += predicted.eq(targets).sum().item()            
+            print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                        % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')
+        print()  
         train_accuracy = correct/total
         train_avg_loss = total_loss/len(train_loader)
-        print()
+
+        # Save precision
+        print(tp/tpfp ,tp/tpfn, tp , tpfp)
+        print(tp2/ tpfp2, tp2/tpfn2, tp2, tpfp2, total)
+        f_pre_l.write('{:.4f},'.format(tp/tpfp))
+        f_pre_a.write('{:.4f},'.format(tp2/tpfp2))
+
+        f_rec_l.write('{:.4f},'.format(tp/tpfn))
+        f_rec_a.write('{:.4f},'.format(tp2/tpfn2))
+
 
         ## validation
         model.eval()
@@ -178,19 +183,21 @@ def train():
         valid_accuracy = utils.validation_accuracy_ours(model2, valid_loader, device)
         valid_accuracy_ = utils.validation_accuracy_ours(model, valid_loader, device)
         valid_accuracy_linear = utils.validation_accuracy_linear(model, valid_loader, device)
-        
+        f_acc_lp.write('{:.4f},'.format(valid_accuracy_linear))
+        f_acc_ia.write('{:.4f},'.format(valid_accuracy_))
+        f_acc_la.write('{:.4f},'.format(valid_accuracy))
         scheduler.step()
         scheduler2.step()
-        if epoch >= max_epoch-10:
-            avg_accuracy += valid_accuracy 
-            kappa =  utils.validation_kohen_kappa_ours(model2, valid_loader, device)
-            avg_kappa += kappa
-        saver.save_checkpoint(epoch, metric = valid_accuracy)
         print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID_2 [acc - {:.4f}], VALID_1 [acc - {:.4f}], VALID(linear) [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy, valid_accuracy_, valid_accuracy_linear))
         print(scheduler.get_last_lr())
-    with open(os.path.join(save_path, 'avgacc.txt'), 'w') as f:
-        f.write(str(avg_accuracy/10))
-        f.write('|')
-        f.write(str(avg_kappa/10))
+    f_pre_l.close()   
+    f_pre_a.close()   
+    f_rec_l.close()   
+    f_rec_a.close()   
+    f_acc_lp.close()   
+    f_acc_ia.close()   
+    f_acc_la.close()   
+
+
 if __name__ =='__main__':
     train()
