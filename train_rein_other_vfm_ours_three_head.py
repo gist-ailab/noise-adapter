@@ -200,6 +200,7 @@ def train():
 
     if args.adapter == 'adaptformer' or args.adapter == 'vpt':
         set_requires_grad(model, ['adapt', 'linear'])
+        set_requires_grad(model2, ['adapt', 'linear'])
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
     optimizer2 = torch.optim.Adam(model2.parameters(), lr=1e-3, weight_decay = 1e-5)
