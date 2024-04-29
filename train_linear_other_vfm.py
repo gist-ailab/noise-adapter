@@ -126,7 +126,6 @@ def train():
         variant = dino_variant._dinov1_variant
         dino_state_dict = torch.load('mae_pretrain_vit_base.pth')['model']
         print(dino_state_dict.keys())
-
         model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
         model.load_state_dict(dino_state_dict, strict=True)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])

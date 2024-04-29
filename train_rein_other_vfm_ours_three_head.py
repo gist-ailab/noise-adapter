@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import argparse
 import timm
@@ -15,6 +16,24 @@ import copy
 import dino_variant
 from sklearn.metrics import f1_score
 
+import adaptformer
+
+def set_requires_grad(model: nn.Module, keywords):
+    """
+    notice:key in name!
+    """
+    requires_grad_names = []
+    num_params = 0
+    num_trainable = 0
+    for name, param in model.named_parameters():
+        num_params += param.numel()
+        if any(key in name for key in keywords):
+            param.requires_grad = True
+            requires_grad_names.append(name)
+            num_trainable += param.numel()
+        else:
+            param.requires_grad = False
+
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', '-d', type=str)
@@ -22,6 +41,8 @@ def train():
     parser.add_argument('--net', default='dinov2', type=str)
     parser.add_argument('--save_path', '-s', type=str)
     parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
+    parser.add_argument('--adapter', default='rein', type=str)
+
 
     args = parser.parse_args()
 
@@ -53,6 +74,34 @@ def train():
     elif args.data == 'dr':
         train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
 
+    tuning_config = argparse.Namespace()
+
+    if args.adapter == 'adaptformer':
+        # Adaptformer
+        tuning_config.ffn_adapt = True
+        tuning_config.ffn_num = 64
+        tuning_config.ffn_option="parallel"
+        tuning_config.ffn_adapter_layernorm_option="none"
+        tuning_config.ffn_adapter_init_option="lora"
+        tuning_config.ffn_adapter_scalar="0.1"
+        tuning_config.d_model=768
+        # VPT
+        tuning_config.vpt_on = False
+        tuning_config.vpt_num = 1
+
+        tuning_config.fulltune = False
+    elif args.adapter == 'vpt':
+        # Adaptformer
+        tuning_config.ffn_adapt = False
+        tuning_config.ffn_num = 64
+        tuning_config.ffn_option="parallel"
+        tuning_config.ffn_adapter_layernorm_option="none"
+        tuning_config.ffn_adapter_init_option="lora"
+        tuning_config.ffn_adapter_scalar="0.1"
+        tuning_config.d_model=768
+        # VPT
+        tuning_config.vpt_on = True
+        tuning_config.vpt_num = 12
 
     if args.net == 'dinov2':
         model_load = dino_variant._base_dino
@@ -61,9 +110,22 @@ def train():
         model = torch.hub.load('facebookresearch/dinov2', model_load)
         dino_state_dict = model.state_dict()
 
-        model = rein.ReinsDinoVisionTransformer(
-            **variant
-        )
+
+        if args.adapter == 'rein':
+            model = rein.ReinsDinoVisionTransformer(
+                **variant
+            )
+        if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+            extra_tokens = dino_state_dict['pos_embed'][:, :1]
+            src_weight = dino_state_dict['pos_embed'][:, 1:]
+            src_weight = src_weight.reshape(1, 37, 37, 768).permute(0, 3, 1, 2)
+
+            dst_weight = F.interpolate(
+                src_weight.float(), size=16, align_corners=False, mode='bilinear')
+            dst_weight = torch.flatten(dst_weight, 2).transpose(1, 2)
+            dst_weight = dst_weight.to(src_weight.dtype)
+            dino_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
+            model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config)
         model.load_state_dict(dino_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
@@ -74,9 +136,12 @@ def train():
         variant = dino_variant._dinov1_variant
         dino_state_dict = model.state_dict()
         print(dino_state_dict.keys())
-        model = rein.ReinsDinoVisionTransformer(
-            **variant
-        )
+        if args.adapter == 'rein':
+            model = rein.ReinsDinoVisionTransformer(
+                **variant
+            )
+        if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+            model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
         model.load_state_dict(dino_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
@@ -113,9 +178,12 @@ def train():
         dino_state_dict = torch.load('mae_pretrain_vit_base.pth')['model']
         print(dino_state_dict.keys())
 
-        model = rein.ReinsDinoVisionTransformer(
-            **variant
-        )
+        if args.adapter == 'rein':
+            model = rein.ReinsDinoVisionTransformer(
+                **variant
+            )
+        if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+            model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
         model.load_state_dict(dino_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
@@ -128,7 +196,10 @@ def train():
     
     model2 = copy.deepcopy(model)
     model2.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
+    model2.to(device)
 
+    if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+        set_requires_grad(model, ['adapt', 'linear'])
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
     optimizer2 = torch.optim.Adam(model2.parameters(), lr=1e-3, weight_decay = 1e-5)
@@ -153,17 +224,20 @@ def train():
             optimizer.zero_grad()
             
             features_rein = model.forward_features(inputs)
-            features_rein = features_rein[:, 0, :]
+            if args.adapter == 'rein':
+                features_rein = features_rein[:, 0, :]
             outputs = model.linear_rein(features_rein)
 
             features_rein2 = model2.forward_features(inputs)
-            features_rein2 = features_rein2[:, 0, :]
+            if args.adapter == 'rein':
+                features_rein2 = features_rein2[:, 0, :]
             outputs2 = model2.linear_rein(features_rein2)
 
             with torch.no_grad():
                 # features_ = model.forward_features_no_rein(inputs)
                 features_ = model.forward_features_no_rein(inputs)
-                features_ = features_[:, 0, :]
+                if args.adapter == 'rein':
+                    features_ = features_[:, 0, :]
             outputs_ = model.linear(features_)
             # print(outputs.shape, outputs_.shape)
 

@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import argparse
 import timm
@@ -10,9 +11,27 @@ import utils
 import random
 import rein
 import open_clip
+import clip
+import adaptformer
 
 import dino_variant
 from sklearn.metrics import f1_score
+
+def set_requires_grad(model: nn.Module, keywords):
+    """
+    notice:key in name!
+    """
+    requires_grad_names = []
+    num_params = 0
+    num_trainable = 0
+    for name, param in model.named_parameters():
+        num_params += param.numel()
+        if any(key in name for key in keywords):
+            param.requires_grad = True
+            requires_grad_names.append(name)
+            num_trainable += param.numel()
+        else:
+            param.requires_grad = False
 
 def train():
     parser = argparse.ArgumentParser()
@@ -21,6 +40,8 @@ def train():
     parser.add_argument('--net', default='dinov2', type=str)
     parser.add_argument('--save_path', '-s', type=str)
     parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
+    parser.add_argument('--adapter', default='rein', type=str)
+
 
     args = parser.parse_args()
 
@@ -52,6 +73,34 @@ def train():
     elif args.data == 'dr':
         train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
 
+    tuning_config = argparse.Namespace()
+    if args.adapter == 'adaptformer':
+        # Adaptformer
+        tuning_config.ffn_adapt = True
+        tuning_config.ffn_num = 64
+        tuning_config.ffn_option="parallel"
+        tuning_config.ffn_adapter_layernorm_option="none"
+        tuning_config.ffn_adapter_init_option="lora"
+        tuning_config.ffn_adapter_scalar="0.1"
+        tuning_config.d_model=768
+        # VPT
+        tuning_config.vpt_on = False
+        tuning_config.vpt_num = 1
+
+        tuning_config.fulltune = False
+    elif args.adapter == 'vpt':
+        # Adaptformer
+        tuning_config.ffn_adapt = False
+        tuning_config.ffn_num = 64
+        tuning_config.ffn_option="parallel"
+        tuning_config.ffn_adapter_layernorm_option="none"
+        tuning_config.ffn_adapter_init_option="lora"
+        tuning_config.ffn_adapter_scalar="0.1"
+        tuning_config.d_model=768
+        # VPT
+        tuning_config.vpt_on = True
+        tuning_config.vpt_num = 12
+
 
     if args.net == 'dinov2':
         model_load = dino_variant._base_dino
@@ -60,9 +109,21 @@ def train():
         model = torch.hub.load('facebookresearch/dinov2', model_load)
         dino_state_dict = model.state_dict()
 
-        model = rein.ReinsDinoVisionTransformer(
-            **variant
-        )
+        if args.adapter == 'rein':
+            model = rein.ReinsDinoVisionTransformer(
+                **variant
+            )
+        if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+            extra_tokens = dino_state_dict['pos_embed'][:, :1]
+            src_weight = dino_state_dict['pos_embed'][:, 1:]
+            src_weight = src_weight.reshape(1, 37, 37, 768).permute(0, 3, 1, 2)
+
+            dst_weight = F.interpolate(
+                src_weight.float(), size=16, align_corners=False, mode='bilinear')
+            dst_weight = torch.flatten(dst_weight, 2).transpose(1, 2)
+            dst_weight = dst_weight.to(src_weight.dtype)
+            dino_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
+            model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config)
         model.load_state_dict(dino_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
@@ -72,9 +133,14 @@ def train():
         variant = dino_variant._dinov1_variant
         dino_state_dict = model.state_dict()
         print(dino_state_dict.keys())
-        model = rein.ReinsDinoVisionTransformer(
-            **variant
-        )
+
+        if args.adapter == 'rein':
+            model = rein.ReinsDinoVisionTransformer(
+                **variant
+            )
+        if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+            model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
+
         model.load_state_dict(dino_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
@@ -83,6 +149,7 @@ def train():
         # print(open_clip.list_pretrained())
         variant = dino_variant._clip_variant
         model, _, preprocess = open_clip.create_model_and_transforms('ViT-B-16', pretrained='laion2b_s34b_b88k')
+        # model, preprocess = clip.load("ViT-B/16", device=device)
         clip_state_dict = model.state_dict()
 
         state_dict = {}
@@ -90,33 +157,19 @@ def train():
         for k in clip_state_dict.keys():
             if k.startswith("visual."):
                 new_k = k.replace("visual.transformer.res", "")
+                new_k = new_k.replace('ln_', 'norm')
+                new_k = new_k.replace('in_proj_', 'qkv.')
+                new_k = new_k.replace('out_proj', 'proj')
+                new_k = new_k.replace('c_fc', 'fc1')
+                new_k = new_k.replace('c_proj', 'fc2')
+
+                new_k = k.replace("visual.", "")
+                new_k = k.replace("class_embedding", "cls_token")
+
+
                 state_dict[new_k] = clip_state_dict[k]
 
-        # if "positional_embedding" in clip_state_dict.keys():
-        #     if (
-        #         self.positional_embedding.shape
-        #         != state_dict["positional_embedding"].shape
-        #     ):
-        #         print(
-        #             f'Resize the pos_embed shape from {state_dict["positional_embedding"].shape} to {self.positional_embedding.shape}'
-        #         )
-        #         cls_pos = state_dict["positional_embedding"][0:1, :]
-        #         leng = int(state_dict["positional_embedding"][1:,].shape[-2] ** 0.5)
-        #         spatial_pos = F.interpolate(
-        #             state_dict["positional_embedding"][1:,]
-        #             .reshape(1, leng, leng, self.width)
-        #             .permute(0, 3, 1, 2),
-        #             size=(self.spatial_size, self.spatial_size),
-        #             mode="bilinear",
-        #         )
-        #         spatial_pos = spatial_pos.reshape(
-        #             self.width, self.spatial_size * self.spatial_size
-        #         ).permute(1, 0)
-        #         positional_embedding = torch.cat([cls_pos, spatial_pos], dim=0)
-        #         assert (
-        #             self.positional_embedding.shape
-        #             == state_dict["positional_embedding"].shape
-        #         )
+
         state_dict["pos_embed"] = clip_state_dict["positional_embedding"]
 
         # conv1 = clip_state_dict["conv1.weight"]
@@ -134,11 +187,12 @@ def train():
     elif args.net == 'mae':
         variant = dino_variant._dinov1_variant
         dino_state_dict = torch.load('mae_pretrain_vit_base.pth')['model']
-        print(dino_state_dict.keys())
-
-        model = rein.ReinsDinoVisionTransformer(
-            **variant
-        )
+        if args.adapter == 'rein':
+            model = rein.ReinsDinoVisionTransformer(
+                **variant
+            )
+        if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+            model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
         model.load_state_dict(dino_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
@@ -146,6 +200,9 @@ def train():
     print(model)
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
+
+    if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+        set_requires_grad(model, ['adapt', 'linear'])
     
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
@@ -166,7 +223,9 @@ def train():
             optimizer.zero_grad()
             
             features = model.forward_features(inputs)
-            features = features[:, 0, :]
+            if args.adapter == 'rein':
+                features = features[:, 0, :]
+            # print(features.shape)
             outputs = model.linear(features)
             loss = criterion(outputs, targets)
             loss.backward()            
