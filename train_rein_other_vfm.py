@@ -99,7 +99,7 @@ def train():
         tuning_config.d_model=768
         # VPT
         tuning_config.vpt_on = True
-        tuning_config.vpt_num = 12
+        tuning_config.vpt_num = 1
 
 
     if args.net == 'dinov2':
@@ -202,7 +202,7 @@ def train():
     model.eval()
 
     if args.adapter == 'adaptformer' or args.adapter == 'vpt':
-        set_requires_grad(model, ['adapt', 'linear'])
+        set_requires_grad(model, ['adapt', 'linear', 'embeddings'])
     
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
@@ -248,7 +248,7 @@ def train():
         total = 0
         correct = 0
 
-        valid_accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy_rein(model, valid_loader, device, args.adapter)
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
         scheduler.step()

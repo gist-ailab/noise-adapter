@@ -199,7 +199,8 @@ def train():
     model2.to(device)
 
     if args.adapter == 'adaptformer' or args.adapter == 'vpt':
-        set_requires_grad(model, ['adapt', 'linear'])
+        set_requires_grad(model, ['adapt', 'linear', 'embeddings'])
+        set_requires_grad(model2, ['adapt', 'linear', 'embeddings'])
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
     optimizer2 = torch.optim.Adam(model2.parameters(), lr=1e-3, weight_decay = 1e-5)
@@ -282,8 +283,8 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
-        valid_accuracy = utils.validation_accuracy_ours(model2, valid_loader, device)
-        valid_accuracy_ = utils.validation_accuracy_ours(model, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy_ours(model2, valid_loader, device, args.adapter)
+        valid_accuracy_ = utils.validation_accuracy_ours(model, valid_loader, device, args.adapter)
         valid_accuracy_linear = utils.validation_accuracy_linear(model, valid_loader, device)
         
         scheduler.step()

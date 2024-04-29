@@ -129,7 +129,7 @@ def validation_accuracy_resnet(model, loader, device):
     return valid_accuracy
 
 
-def validation_accuracy_rein(model, loader, device):
+def validation_accuracy_rein(model, loader, device, adapter):
     total = 0
     correct = 0
     
@@ -138,7 +138,8 @@ def validation_accuracy_rein(model, loader, device):
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)
             features = model.forward_features(inputs)
-            features = features[:, 0, :]
+            if adapter == 'rein':
+                features = features[:, 0, :]
             outputs = model.linear(features)
 
             total += targets.size(0)
@@ -194,7 +195,7 @@ def validation_accuracy_shared(model, loader, device):
 
 
 
-def validation_accuracy_ours(model, loader, device):
+def validation_accuracy_ours(model, loader, device, adapter):
     total = 0
     correct = 0
     
@@ -203,7 +204,8 @@ def validation_accuracy_ours(model, loader, device):
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)
             features = model.forward_features(inputs)
-            features = features[:, 0, :]
+            if adapter == 'rein':
+                features = features[:, 0, :]
             outputs = model.linear_rein(features)
             outputs = outputs #+ outputs_
 
