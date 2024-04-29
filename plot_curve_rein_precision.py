@@ -39,6 +39,8 @@ def train():
 
     if args.data == 'ham10000':
         train_loader, valid_loader = utils.get_noise_dataset_with_cleanlabel(data_path, noise_rate=noise_rate, batch_size = batch_size)
+    if args.data == 'aptos':
+        train_loader, valid_loader = utils.get_aptos_noise_dataset_with_cleanlabel(data_path, noise_rate=noise_rate, batch_size = batch_size)
 
     if args.netsize == 's':
         model_load = dino_variant._small_dino

@@ -40,6 +40,8 @@ def train():
 
     if args.data == 'ham10000':
         train_loader, valid_loader = utils.get_noise_dataset_with_cleanlabel(data_path, noise_rate=noise_rate, batch_size = batch_size)
+    if args.data == 'aptos':
+        train_loader, valid_loader = utils.get_aptos_noise_dataset_with_cleanlabel(data_path, noise_rate=noise_rate, batch_size = batch_size)
 
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -126,7 +128,7 @@ def train():
                 # print(tpfp, tp, tpfn, clean_idx, true_accurate)
             
 
-            total_loss += loss_1
+            total_loss += loss_1.item()
             total += targets.size(0)
             _, predicted = outputs1[:len(targets)].max(1)            
             correct += predicted.eq(targets).sum().item()            
@@ -153,7 +155,7 @@ def train():
         f_acc_codis.write('{:.4f},'.format(valid_accuracy))
         scheduler1.step()
         scheduler2.step()
-        print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID_2 [acc - {:.4f}], VALID_1 [acc - {:.4f}], VALID(linear) [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy, valid_accuracy_, valid_accuracy_linear))
+        print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy))
         print(scheduler1.get_last_lr())
     f_pre_codis.close()   
     f_rec_codis.close()   

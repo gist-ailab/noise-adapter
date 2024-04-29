@@ -9,17 +9,20 @@ import utils
 
 import random
 import rein
+import clip
+import copy
 
 import dino_variant
-
+from sklearn.metrics import f1_score
 
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', '-d', type=str)
     parser.add_argument('--gpu', '-g', default = '0', type=str)
-    parser.add_argument('--netsize', default='s', type=str)
+    parser.add_argument('--net', default='dinov2', type=str)
     parser.add_argument('--save_path', '-s', type=str)
     parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
+
     args = parser.parse_args()
 
     config = utils.read_conf('conf/'+args.data+'.json')
@@ -39,6 +42,8 @@ def train():
         train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'aptos':
         train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
+    elif args.data == 'nihchest':
+        train_loader, valid_loader = utils.get_nihxray(data_path, batch_size = batch_size)
     elif args.data == 'idrid':
         train_loader, valid_loader = utils.get_idrid_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'chaoyang':
@@ -47,52 +52,82 @@ def train():
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'dr':
         train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
-    
-    
-    num_samples = {}
-    for i in range(config['num_classes']):
-        num_samples[i] = 0
-    for sample in train_loader.dataset:
-        num_samples[sample[1]]+=1
-    print(num_samples)
-    
-    class_weight = torch.tensor([sum(num_samples.values())/num_samples[x] for x in num_samples])
-    print(class_weight)
-        
-    if args.netsize == 's':
-        model_load = dino_variant._small_dino
-        variant = dino_variant._small_variant
-    elif args.netsize == 'b':
+
+
+    if args.net == 'dinov2':
         model_load = dino_variant._base_dino
         variant = dino_variant._base_variant
-    elif args.netsize == 'l':
-        model_load = dino_variant._large_dino
-        variant = dino_variant._large_variant
-    # model = timm.create_model(network, pretrained=True, num_classes=2) 
-    model = torch.hub.load('facebookresearch/dinov2', model_load)
-    dino_state_dict = model.state_dict()
 
-    model = rein.ReinsDinoVisionTransformer(
-        **variant
-    )
-    model.load_state_dict(dino_state_dict, strict=False)
-    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-    model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
-    model.to(device)
-    
-    # print(model.state_dict()['blocks.11.mlp.fc2.weight'])
+        model = torch.hub.load('facebookresearch/dinov2', model_load)
+        dino_state_dict = model.state_dict()
+
+        model = rein.ReinsDinoVisionTransformer(
+            **variant
+        )
+        model.load_state_dict(dino_state_dict, strict=False)
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.to(device)  
+
+    elif args.net == 'dinov1':
+        model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
+        variant = dino_variant._dinov1_variant
+        dino_state_dict = model.state_dict()
+        print(dino_state_dict.keys())
+        model = rein.ReinsDinoVisionTransformer(
+            **variant
+        )
+        model.load_state_dict(dino_state_dict, strict=False)
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.to(device)  
+
+    elif args.net == 'clip':
+        print(clip.available_models())
+        variant = dino_variant._clip_variant
+        model, preprocess = clip.load("ViT-B/16", device=device)
+        clip_state_dict = model.state_dict()
+
+        state_dict = {}
+
+        for k in clip_state_dict.keys():
+            if k.startswith("visual."):
+                new_k = k.replace("visual.", "")
+                state_dict[new_k] = clip_state_dict[k]
+        state_dict["positional_embedding"] = clip_state_dict["positional_embedding"]
+
+        conv1 = clip_state_dict["conv1.weight"]
+        state_dict["conv1.weight"] = conv1
+
+        model = rein.ReinsDinoVisionTransformer(
+            **variant
+        )
+        u, w = model.load_state_dict(clip_state_dict, False)
+        print(u, w, "are misaligned params in vision transformer")
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.to(device)  
+
+    elif args.net == 'mae':
+        variant = dino_variant._dinov1_variant
+        dino_state_dict = torch.load('mae_pretrain_vit_base.pth')['model']
+        print(dino_state_dict.keys())
+
+        model = rein.ReinsDinoVisionTransformer(
+            **variant
+        )
+        model.load_state_dict(dino_state_dict, strict=False)
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.to(device)  
+
+    print(model)
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
-    model.eval()
-    
-    model2 = rein.ReinsDinoVisionTransformer(
-        **variant
-    )
-    model2.load_state_dict(dino_state_dict, strict=False)
-    model2.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
-    model2.to(device)
 
     model.eval()
-    model2.eval()
+    
+    model2 = copy.deepcopy(model)
+    model2.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
 
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
@@ -104,9 +139,8 @@ def train():
     print(train_loader.dataset[0][0].shape)
 
     avg_accuracy = 0.0
-    avg_kappa = 0.0
+    avg_kappa=0
     for epoch in range(max_epoch):
-        ## training
         model.train()
         model2.train()
         total_loss = 0
