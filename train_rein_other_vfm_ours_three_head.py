@@ -40,7 +40,7 @@ def train():
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--net', default='dinov2', type=str)
     parser.add_argument('--save_path', '-s', type=str)
-    parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
+    parser.add_argument('--noise_rate', '-n', type=float, default=0.4)
     parser.add_argument('--adapter', default='rein', type=str)
 
 
@@ -101,7 +101,7 @@ def train():
         tuning_config.d_model=768
         # VPT
         tuning_config.vpt_on = True
-        tuning_config.vpt_num = 12
+        tuning_config.vpt_num = 50
 
     if args.net == 'dinov2':
         model_load = dino_variant._base_dino
@@ -139,6 +139,8 @@ def train():
     elif args.net == 'dinov1':
         model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
         variant = dino_variant._dinov1_variant
+        dino_state_dict = model.state_dict()
+
         new_state_dict = dict()
         for k in dino_state_dict.keys():
             new_k = k.replace("mlp.", "")
@@ -298,7 +300,7 @@ def train():
         correct = 0
         valid_accuracy = utils.validation_accuracy_ours(model2, valid_loader, device, args.adapter)
         valid_accuracy_ = utils.validation_accuracy_ours(model, valid_loader, device, args.adapter)
-        valid_accuracy_linear = utils.validation_accuracy_linear(model, valid_loader, device)
+        valid_accuracy_linear = utils.validation_accuracy_linear(model, valid_loader, device, args.adapter)
         
         scheduler.step()
         scheduler2.step()

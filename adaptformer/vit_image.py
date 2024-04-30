@@ -133,7 +133,7 @@ class VisionTransformer(nn.Module):
         # x = x + self.pos_embed
         x = x + self.interpolate_pos_encoding(x, w, h)
         x = self.pos_drop(x)
-# interpolate_pos_encoding
+        # interpolate_pos_encoding
         for idx, blk in enumerate(self.blocks):
             if self.tuning_config.vpt_on:
                 eee = self.embeddings[idx].expand(B, -1, -1)

@@ -236,7 +236,7 @@ def validation_accuracy_rein_full(model, loader, device):
     return valid_accuracy
 
 
-def validation_accuracy_linear(model, loader, device):
+def validation_accuracy_linear(model, loader, device, adapter='rein'):
     total = 0
     correct = 0
     
@@ -245,7 +245,8 @@ def validation_accuracy_linear(model, loader, device):
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)
             features = model.forward_features_no_rein(inputs)
-            features = features[:, 0, :]
+            if adapter == 'rein':
+                features = features[:, 0, :]
             outputs = model.linear(features)
 
             total += targets.size(0)

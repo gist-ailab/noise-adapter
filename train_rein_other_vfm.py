@@ -54,7 +54,7 @@ def train():
     save_path = os.path.join(config['save_path'], args.save_path)
     data_path = config['id_dataset']
     batch_size = int(config['batch_size'])
-    max_epoch = int(config['epoch']) *2
+    max_epoch = int(config['epoch'])
     noise_rate = args.noise_rate
 
     if not os.path.exists(save_path):
@@ -103,7 +103,7 @@ def train():
         tuning_config.d_model=768
         # VPT
         tuning_config.vpt_on = True
-        tuning_config.vpt_num = 1
+        tuning_config.vpt_num = 50
 
 
     if args.net == 'dinov2':
@@ -117,7 +117,11 @@ def train():
             model = rein.ReinsDinoVisionTransformer(
                 **variant
             )
+            new_state_dict = dino_state_dict
         if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+            new_state_dict = dict()
+            for k in dino_state_dict.keys():
+                new_k = k.replace("mlp.", "")
             extra_tokens = dino_state_dict['pos_embed'][:, :1]
             src_weight = dino_state_dict['pos_embed'][:, 1:]
             src_weight = src_weight.reshape(1, 37, 37, 768).permute(0, 3, 1, 2)
@@ -126,9 +130,9 @@ def train():
                 src_weight.float(), size=16, align_corners=False, mode='bilinear')
             dst_weight = torch.flatten(dst_weight, 2).transpose(1, 2)
             dst_weight = dst_weight.to(src_weight.dtype)
-            dino_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
+            new_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
             model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config)
-        model.load_state_dict(dino_state_dict, strict=True)
+        model.load_state_dict(new_state_dict, strict=True)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
 
