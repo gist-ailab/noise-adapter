@@ -130,7 +130,7 @@ def validation_accuracy_resnet(model, loader, device):
     return valid_accuracy
 
 
-def validation_accuracy_rein(model, loader, device, adapter, no_rein = False):
+def validation_accuracy_rein(model, loader, device, adapter='rein', no_rein = False):
     total = 0
     correct = 0
     
@@ -197,7 +197,7 @@ def validation_accuracy_shared(model, loader, device):
 
 
 
-def validation_accuracy_ours(model, loader, device, adapter):
+def validation_accuracy_ours(model, loader, device, adapter='rein'):
     total = 0
     correct = 0
     

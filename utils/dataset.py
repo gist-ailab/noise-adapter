@@ -16,6 +16,7 @@ from .chest14 import NIHchestXray
 from .idrid import IDRID
 from .chaoyang import CHAOYANG
 from .dr import DR
+from .fgadr import FGADR
 
 class ImageFolderTwoLabel(torchvision.datasets.ImageFolder):
     def __getitem__(self, index: int):
@@ -325,7 +326,8 @@ def get_dr(path, batch_size = 32):
     aptos_train_data = APTOS2019('./data/APTOS-2019', train=True, transforms = test_transform)
     aptos_valid_data = APTOS2019_valid('./data/APTOS-2019', transforms = test_transform)
     aptos_test_data = APTOS2019('./data/APTOS-2019', train=False, transforms = test_transform)
-
+    
+    fgadr_data = FGADR('./data/FGADR', transforms = test_transform)
 
 
     aptos_train_data.samples.extend(aptos_valid_data.samples)
@@ -333,7 +335,8 @@ def get_dr(path, batch_size = 32):
 
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
     valid_loader = torch.utils.data.DataLoader(aptos_train_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
-    return train_loader, valid_loader
+    fgadr_loader = torch.utils.data.DataLoader(fgadr_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader, fgadr_loader
 
 def get_nihxray(batch_size = 32):
     from medmnist import ChestMNIST

@@ -44,7 +44,7 @@ def train():
     elif args.data == 'nihxray':
         train_loader, valid_loader = utils.get_nihxray(batch_size = batch_size)
     elif args.data == 'dr':
-        train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
+        train_loader, valid_loader, fgadr_loader = utils.get_dr(data_path, batch_size = batch_size)
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -76,15 +76,19 @@ def train():
     if 'ours' in args.save_path:
         kappa_score = utils.validation_kohen_kappa_ours(model, valid_loader, device)
         accuracy = utils.validation_accuracy_ours(model, valid_loader, device)
+        accuracy_fgadr = utils.validation_accuracy_ours(model, fgadr_loader, device)
     elif 'rein' in args.save_path:
         kappa_score = utils.validation_kohen_kappa(model, valid_loader, device)
         accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
+        accuracy_fgadr = utils.validation_accuracy_rein(model, fgadr_loader, device)
     else:
         # Linear or full
         accuracy = utils.validation_accuracy(model, valid_loader, device)
         kappa_score = utils.validation_kohen_kappa_linear(model, valid_loader, device)
+        accuracy_fgadr = utils.validation_accuracy(model, fgadr_loader, device)
 
-    print(accuracy, kappa_score)
+
+    print(accuracy, accuracy_fgadr, kappa_score)
 
         
 if __name__ =='__main__':
