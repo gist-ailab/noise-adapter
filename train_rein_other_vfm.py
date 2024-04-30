@@ -24,14 +24,18 @@ def set_requires_grad(model: nn.Module, keywords):
     requires_grad_names = []
     num_params = 0
     num_trainable = 0
+    params = []
     for name, param in model.named_parameters():
         num_params += param.numel()
         if any(key in name for key in keywords):
+            print(name)
             param.requires_grad = True
             requires_grad_names.append(name)
             num_trainable += param.numel()
+            params.append(param)
         else:
             param.requires_grad = False
+    return params
 
 def train():
     parser = argparse.ArgumentParser()
@@ -50,7 +54,7 @@ def train():
     save_path = os.path.join(config['save_path'], args.save_path)
     data_path = config['id_dataset']
     batch_size = int(config['batch_size'])
-    max_epoch = int(config['epoch'])
+    max_epoch = int(config['epoch']) *2
     noise_rate = args.noise_rate
 
     if not os.path.exists(save_path):
@@ -201,11 +205,14 @@ def train():
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
 
-    if args.adapter == 'adaptformer' or args.adapter == 'vpt':
-        set_requires_grad(model, ['adapt', 'linear', 'embeddings'])
     
+    if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+        params = set_requires_grad(model, ['adapt', 'linear', 'embeddings'])
+        # print(params)
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
+    if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+        optimizer = torch.optim.SGD(params, lr=1e-1, momentum=0.9, weight_decay = 0)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
@@ -222,7 +229,7 @@ def train():
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             
-            features = model.forward_features(inputs)
+            features = model(inputs)
             if args.adapter == 'rein':
                 features = features[:, 0, :]
             # print(features.shape)

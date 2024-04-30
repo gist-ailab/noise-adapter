@@ -67,7 +67,7 @@ class Block(nn.Module):
         self.mlp_drop = nn.Dropout(drop)
 
         if config.ffn_adapt:
-            self.adaptmlp = Adapter(self.config, dropout=0.1, bottleneck=config.ffn_num,
+            self.adaptmlp = Adapter(self.config, dropout=0.0, bottleneck=config.ffn_num,
                                     init_option=config.ffn_adapter_init_option,
                                     adapter_scalar=config.ffn_adapter_scalar,
                                     adapter_layernorm_option=config.ffn_adapter_layernorm_option,
