@@ -10,8 +10,8 @@ import utils
 
 import random
 import rein
-import open_clip
-import clip
+# import open_clip
+# import clip
 import adaptformer
 
 import dino_variant
