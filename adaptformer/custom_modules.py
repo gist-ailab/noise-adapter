@@ -12,10 +12,11 @@ class Attention(nn.Module):
         self.head_dim = dim // num_heads
         self.scale = head_dim ** -0.5
 
-        self.q_proj = nn.Linear(dim, dim, bias=qkv_bias)
-        self.v_proj = nn.Linear(dim, dim, bias=qkv_bias)
-        self.k_proj = nn.Linear(dim, dim, bias=qkv_bias)
+        # self.q_proj = nn.Linear(dim, dim, bias=qkv_bias)
+        # self.v_proj = nn.Linear(dim, dim, bias=qkv_bias)
+        # self.k_proj = nn.Linear(dim, dim, bias=qkv_bias)
 
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
@@ -26,26 +27,38 @@ class Attention(nn.Module):
     def forward(self, x):
         B, N, C = x.shape
 
-        q = self.q_proj(x)
-        k = self._shape(self.k_proj(x), -1, B).view(B * self.num_heads, -1, self.head_dim)
-        v = self._shape(self.v_proj(x), -1, B).view(B * self.num_heads, -1, self.head_dim)
-        q = self._shape(q, N, B).view(B * self.num_heads, -1, self.head_dim)
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
 
-        # attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn_weights = torch.bmm(q, k.transpose(1, 2)) * self.scale
+        q, k, v = qkv[0] * self.scale, qkv[1], qkv[2]
+        attn = q @ k.transpose(-2, -1)
 
-        attn_weights = nn.functional.softmax(attn_weights, dim=-1)
-        attn_probs = self.attn_drop(attn_weights)
-        attn_output = torch.bmm(attn_probs, v)
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
 
-        attn_output = attn_output.view(B, self.num_heads, N, self.head_dim)
-        attn_output = attn_output.transpose(1, 2)
-        attn_output = attn_output.reshape(B, N, C)
-
-        x = self.proj(attn_output)
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
         x = self.proj_drop(x)
-
         return x
+        # q = self.q_proj(x)
+        # k = self._shape(self.k_proj(x), -1, B).view(B * self.num_heads, -1, self.head_dim)
+        # v = self._shape(self.v_proj(x), -1, B).view(B * self.num_heads, -1, self.head_dim)
+        # q = self._shape(q, N, B).view(B * self.num_heads, -1, self.head_dim)
+
+        # # attn = (q @ k.transpose(-2, -1)) * self.scale
+        # attn_weights = torch.bmm(q, k.transpose(1, 2)) * self.scale
+
+        # attn_weights = nn.functional.softmax(attn_weights, dim=-1)
+        # attn_probs = self.attn_drop(attn_weights)
+        # attn_output = torch.bmm(attn_probs, v)
+
+        # attn_output = attn_output.view(B, self.num_heads, N, self.head_dim)
+        # attn_output = attn_output.transpose(1, 2)
+        # attn_output = attn_output.reshape(B, N, C)
+
+        # x = self.proj(attn_output)
+        # x = self.proj_drop(x)
+
+        # return x
 
 
 class Block(nn.Module):

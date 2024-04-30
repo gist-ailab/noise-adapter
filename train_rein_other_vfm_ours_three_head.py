@@ -115,7 +115,12 @@ def train():
             model = rein.ReinsDinoVisionTransformer(
                 **variant
             )
+            new_state_dict = dino_state_dict
         if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+            new_state_dict = dict()
+            for k in dino_state_dict.keys():
+                new_k = k.replace("mlp.", "")
+                new_state_dict[new_k] = dino_state_dict[k]
             extra_tokens = dino_state_dict['pos_embed'][:, :1]
             src_weight = dino_state_dict['pos_embed'][:, 1:]
             src_weight = src_weight.reshape(1, 37, 37, 768).permute(0, 3, 1, 2)
@@ -126,7 +131,7 @@ def train():
             dst_weight = dst_weight.to(src_weight.dtype)
             dino_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
             model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config)
-        model.load_state_dict(dino_state_dict, strict=False)
+        model.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
@@ -134,7 +139,11 @@ def train():
     elif args.net == 'dinov1':
         model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
         variant = dino_variant._dinov1_variant
-        dino_state_dict = model.state_dict()
+        new_state_dict = dict()
+        for k in dino_state_dict.keys():
+            new_k = k.replace("mlp.", "")
+            new_state_dict[new_k] = dino_state_dict[k]
+
         print(dino_state_dict.keys())
         if args.adapter == 'rein':
             model = rein.ReinsDinoVisionTransformer(
@@ -142,7 +151,7 @@ def train():
             )
         if args.adapter == 'adaptformer' or args.adapter == 'vpt':
             model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
-        model.load_state_dict(dino_state_dict, strict=False)
+        model.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
@@ -177,6 +186,10 @@ def train():
         variant = dino_variant._dinov1_variant
         dino_state_dict = torch.load('mae_pretrain_vit_base.pth')['model']
         print(dino_state_dict.keys())
+        new_state_dict = dict()
+        for k in dino_state_dict.keys():
+            new_k = k.replace("mlp.", "")
+            new_state_dict[new_k] = dino_state_dict[k]
 
         if args.adapter == 'rein':
             model = rein.ReinsDinoVisionTransformer(
@@ -184,7 +197,7 @@ def train():
             )
         if args.adapter == 'adaptformer' or args.adapter == 'vpt':
             model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
-        model.load_state_dict(dino_state_dict, strict=False)
+        model.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  

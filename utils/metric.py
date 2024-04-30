@@ -129,15 +129,16 @@ def validation_accuracy_resnet(model, loader, device):
     return valid_accuracy
 
 
-def validation_accuracy_rein(model, loader, device, adapter):
+def validation_accuracy_rein(model, loader, device, adapter, no_rein = False):
     total = 0
     correct = 0
+    
     
     model.eval()
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)
-            features = model.forward_features(inputs)
+            features = model.forward_features_no_rein(inputs) if no_rein else model.forward_features(inputs)
             if adapter == 'rein':
                 features = features[:, 0, :]
             outputs = model.linear(features)

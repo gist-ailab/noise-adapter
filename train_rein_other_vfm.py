@@ -128,16 +128,19 @@ def train():
             dst_weight = dst_weight.to(src_weight.dtype)
             dino_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
             model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config)
-        model.load_state_dict(dino_state_dict, strict=False)
+        model.load_state_dict(dino_state_dict, strict=True)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
 
     elif args.net == 'dinov1':
-        model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
+        model_ = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
         variant = dino_variant._dinov1_variant
-        dino_state_dict = model.state_dict()
-        print(dino_state_dict.keys())
-
+        dino_state_dict = model_.state_dict()
+        # print(dino_state_dict.keys())
+        new_state_dict = dict()
+        for k in dino_state_dict.keys():
+            new_k = k.replace("mlp.", "")
+            new_state_dict[new_k] = dino_state_dict[k]
         if args.adapter == 'rein':
             model = rein.ReinsDinoVisionTransformer(
                 **variant
@@ -145,10 +148,10 @@ def train():
         if args.adapter == 'adaptformer' or args.adapter == 'vpt':
             model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
 
-        model.load_state_dict(dino_state_dict, strict=False)
+        model.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
-
+        # print('aa')
     elif args.net == 'clip':
         # print(open_clip.list_pretrained())
         variant = dino_variant._clip_variant
@@ -191,13 +194,18 @@ def train():
     elif args.net == 'mae':
         variant = dino_variant._dinov1_variant
         dino_state_dict = torch.load('mae_pretrain_vit_base.pth')['model']
+        new_state_dict = dict()
+        for k in dino_state_dict.keys():
+            new_k = k.replace("mlp.", "")
+            new_state_dict[new_k] = dino_state_dict[k]
+            
         if args.adapter == 'rein':
             model = rein.ReinsDinoVisionTransformer(
                 **variant
             )
         if args.adapter == 'adaptformer' or args.adapter == 'vpt':
             model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
-        model.load_state_dict(dino_state_dict, strict=False)
+        model.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
 
@@ -211,9 +219,13 @@ def train():
         # print(params)
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
-    if args.adapter == 'adaptformer' or args.adapter == 'vpt':
-        optimizer = torch.optim.SGD(params, lr=1e-1, momentum=0.9, weight_decay = 0)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
+
+    # if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+        # optimizer = torch.optim.SGD(model.linear.parameters(), lr=1e-1, momentum=0.9, weight_decay = 0)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
+
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, )
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
 
@@ -229,7 +241,7 @@ def train():
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             
-            features = model(inputs)
+            features = model.forward_features(inputs)
             if args.adapter == 'rein':
                 features = features[:, 0, :]
             # print(features.shape)
@@ -255,7 +267,7 @@ def train():
         total = 0
         correct = 0
 
-        valid_accuracy = utils.validation_accuracy_rein(model, valid_loader, device, args.adapter)
+        valid_accuracy = utils.validation_accuracy_rein(model, valid_loader, device, args.adapter, False)
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
         scheduler.step()
