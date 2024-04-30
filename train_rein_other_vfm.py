@@ -122,6 +122,7 @@ def train():
             new_state_dict = dict()
             for k in dino_state_dict.keys():
                 new_k = k.replace("mlp.", "")
+                new_state_dict[new_k] = dino_state_dict[k]
             extra_tokens = dino_state_dict['pos_embed'][:, :1]
             src_weight = dino_state_dict['pos_embed'][:, 1:]
             src_weight = src_weight.reshape(1, 37, 37, 768).permute(0, 3, 1, 2)
@@ -132,7 +133,7 @@ def train():
             dst_weight = dst_weight.to(src_weight.dtype)
             new_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
             model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config)
-        model.load_state_dict(new_state_dict, strict=True)
+        model.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
 

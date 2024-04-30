@@ -1,9 +1,28 @@
 import torch
 import torch.nn as nn
+
+from torch import  Tensor
+
+from typing import Union
+
 from timm.models.layers import DropPath
 from .adapter import Adapter
 
 
+class LayerScale(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        init_values: Union[float, Tensor] = 1e-5,
+        inplace: bool = False,
+    ) -> None:
+        super().__init__()
+        self.inplace = inplace
+        self.gamma = nn.Parameter(init_values * torch.ones(dim))
+
+    def forward(self, x: Tensor) -> Tensor:
+        return x.mul_(self.gamma) if self.inplace else x * self.gamma
+    
 class Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0., proj_drop=0.,):
         super().__init__()
@@ -79,6 +98,9 @@ class Block(nn.Module):
         self.act = act_layer()
         self.mlp_drop = nn.Dropout(drop)
 
+        self.ls1 = LayerScale(dim, init_values=1e-5)
+        self.ls2 = LayerScale(dim, init_values=1e-5)
+
         if config.ffn_adapt:
             self.adaptmlp = Adapter(self.config, dropout=0.0, bottleneck=config.ffn_num,
                                     init_option=config.ffn_adapter_init_option,
@@ -87,13 +109,17 @@ class Block(nn.Module):
                                     )
 
     def forward(self, x, use_adapter = True):
-        x = x + self.drop_path(self.attn(self.norm1(x)))
+        x = x + self.ls1(self.drop_path(self.attn(self.norm1(x))))
+        # x = x + self.drop_path(self.attn(self.norm1(x)))
+
         if self.config.ffn_adapt and self.config.ffn_option == 'parallel' and use_adapter:
             adapt_x = self.adaptmlp(x, add_residual=False)
 
         residual = x
         x = self.mlp_drop(self.act(self.fc1(self.norm2(x))))
-        x = self.drop_path(self.mlp_drop(self.fc2(x)))
+        x = self.ls2(self.drop_path(self.mlp_drop(self.fc2(x))))
+        # x = self.mlp_drop(self.act(self.fc1(self.norm2(x))))
+        # x = self.drop_path(self.mlp_drop(self.fc2(x)))
 
         if self.config.ffn_adapt and use_adapter:
             if self.config.ffn_option == 'sequential':

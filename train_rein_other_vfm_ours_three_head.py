@@ -121,6 +121,7 @@ def train():
             for k in dino_state_dict.keys():
                 new_k = k.replace("mlp.", "")
                 new_state_dict[new_k] = dino_state_dict[k]
+
             extra_tokens = dino_state_dict['pos_embed'][:, :1]
             src_weight = dino_state_dict['pos_embed'][:, 1:]
             src_weight = src_weight.reshape(1, 37, 37, 768).permute(0, 3, 1, 2)
@@ -129,8 +130,9 @@ def train():
                 src_weight.float(), size=16, align_corners=False, mode='bilinear')
             dst_weight = torch.flatten(dst_weight, 2).transpose(1, 2)
             dst_weight = dst_weight.to(src_weight.dtype)
-            dino_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
+            new_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
             model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config)
+
         model.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
@@ -306,7 +308,7 @@ def train():
         scheduler2.step()
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
-            kappa =  utils.validation_kohen_kappa_ours(model2, valid_loader, device)
+            kappa =  utils.validation_kohen_kappa_ours(model2, valid_loader, device, args.adapter)
             avg_kappa += kappa
         saver.save_checkpoint(epoch, metric = valid_accuracy)
         print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID_2 [acc - {:.4f}], VALID_1 [acc - {:.4f}], VALID(linear) [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy, valid_accuracy_, valid_accuracy_linear))
