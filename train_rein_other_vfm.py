@@ -10,8 +10,8 @@ import utils
 
 import random
 import rein
-import open_clip
-import clip
+# import open_clip
+# import clip
 import adaptformer
 
 import dino_variant
@@ -229,7 +229,7 @@ def train():
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             
-            features = model(inputs)
+            features = model.forward_features(inputs)
             if args.adapter == 'rein':
                 features = features[:, 0, :]
             # print(features.shape)
