@@ -5,6 +5,7 @@
 # MAE: https://github.com/facebookresearch/mae
 # --------------------------------------------------------
 
+import math
 from functools import partial
 from collections import OrderedDict
 import torch
@@ -101,15 +102,38 @@ class VisionTransformer(nn.Module):
         if self.num_tokens == 2:
             self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
 
+    def interpolate_pos_encoding(self, x, w, h):
+        npatch = x.shape[1] - 1
+        N = self.pos_embed.shape[1] - 1
+        if npatch == N and w == h:
+            return self.pos_embed
+        class_pos_embed = self.pos_embed[:, 0]
+        patch_pos_embed = self.pos_embed[:, 1:]
+        dim = x.shape[-1]
+        w0 = w // self.patch_embed.patch_size
+        h0 = h // self.patch_embed.patch_size
+        # we add a small number to avoid floating point error in the interpolation
+        # see discussion at https://github.com/facebookresearch/dino/issues/8
+        w0, h0 = w0 + 0.1, h0 + 0.1
+        patch_pos_embed = nn.functional.interpolate(
+            patch_pos_embed.reshape(1, int(math.sqrt(N)), int(math.sqrt(N)), dim).permute(0, 3, 1, 2),
+            scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
+            mode='bicubic',
+        )
+        assert int(w0) == patch_pos_embed.shape[-2] and int(h0) == patch_pos_embed.shape[-1]
+        patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
+        return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
+    
     def forward_features(self, x):
-        B = x.shape[0]
+        B, nc, w, h = x.shape
         x = self.patch_embed(x)
 
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
-        x = x + self.pos_embed
+        # x = x + self.pos_embed
+        x = x + self.interpolate_pos_encoding(x, w, h)
         x = self.pos_drop(x)
-
+# interpolate_pos_encoding
         for idx, blk in enumerate(self.blocks):
             if self.tuning_config.vpt_on:
                 eee = self.embeddings[idx].expand(B, -1, -1)
@@ -127,23 +151,21 @@ class VisionTransformer(nn.Module):
         return outcome
 
     def forward_features_no_rein(self, x):
-        B = x.shape[0]
+
+
+        B, nc, w, h = x.shape
         x = self.patch_embed(x)
 
         cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
-        x = x + self.pos_embed
+        x = x + self.interpolate_pos_encoding(x, w, h)
         x = self.pos_drop(x)
 
         for idx, blk in enumerate(self.blocks):
             x = blk(x, use_adapter=False)
 
-        if self.global_pool:
-            x = x[:, 1:, :].mean(dim=1)  # global pool without cls token
-            outcome = self.fc_norm(x)
-        else:
-            x = self.norm(x)
-            outcome = x[:, 0]
+        x = self.norm(x)
+        outcome = x[:, 0]
         return outcome
     
     def forward(self, x):
