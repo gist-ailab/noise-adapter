@@ -16,6 +16,8 @@ def train():
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--save_path', '-s', type=str)
     parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
+    parser.add_argument('--linear', action='store_true', default=False)
+
     args = parser.parse_args()
 
     config = utils.read_conf('conf/'+args.data+'.json')
@@ -40,7 +42,7 @@ def train():
     elif 'mnist' in args.data:
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
         
-    model = timm.create_model('resnet101', pretrained = True, num_classes = config['num_classes'])
+    model = timm.create_model('resnet50', pretrained = True, num_classes = config['num_classes'])
     model.to(device)
     
     
@@ -48,11 +50,12 @@ def train():
     model.eval()
     
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
+    params = model.fc.parameters() if args.linear else model.parameters()
+    optimizer = torch.optim.Adam(params, lr=1e-3, weight_decay = 1e-5)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
-    print(train_loader.dataset[0][0].shape)
+    print(train_loader.dataset[0][0].shape, args.linear)
     avg_accuracy = 0.0
     for epoch in range(max_epoch):
         ## training
@@ -65,10 +68,13 @@ def train():
             optimizer.zero_grad()
             
             # outputs = model(inputs)
-            with torch.no_grad():
-                features = model.forward_features(inputs)
-                features = model.global_pool(features)
-            outputs = model.fc(features)
+            if args.linear:
+                with torch.no_grad():
+                    features = model.forward_features(inputs)
+                    features = model.global_pool(features)
+                outputs = model.fc(features)
+            else:
+                outputs = model(inputs)
             # outputs = model.linear(outputs)
             
             loss = criterion(outputs, targets)

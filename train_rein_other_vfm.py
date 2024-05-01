@@ -132,7 +132,7 @@ def train():
             dst_weight = torch.flatten(dst_weight, 2).transpose(1, 2)
             dst_weight = dst_weight.to(src_weight.dtype)
             new_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
-            model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config)
+            model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config, use_dinov2=True)
         model.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  

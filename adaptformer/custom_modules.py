@@ -83,7 +83,7 @@ class Attention(nn.Module):
 class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, config=None, layer_id=None):
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, config=None, layer_id=None, use_dinov2=False):
         super().__init__()
         self.config = config
         self.norm1 = norm_layer(dim)
@@ -98,8 +98,12 @@ class Block(nn.Module):
         self.act = act_layer()
         self.mlp_drop = nn.Dropout(drop)
 
-        self.ls1 = LayerScale(dim, init_values=1e-5)
-        self.ls2 = LayerScale(dim, init_values=1e-5)
+        if use_dinov2:
+            self.ls1 = LayerScale(dim, init_values=1e-5)
+            self.ls2 = LayerScale(dim, init_values=1e-5)
+        else:
+            self.ls1 = nn.Identity()
+            self.ls2 = nn.Identity()
 
         if config.ffn_adapt:
             self.adaptmlp = Adapter(self.config, dropout=0.0, bottleneck=config.ffn_num,
