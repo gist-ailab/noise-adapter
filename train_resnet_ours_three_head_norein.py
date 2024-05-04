@@ -8,7 +8,6 @@ import numpy as np
 import utils
 
 import random
-import rein
 
 
 def train():
@@ -44,17 +43,13 @@ def train():
         
     model = timm.create_model('resnet50', pretrained = True, num_classes = config['num_classes'])
     model.to(device)
-    state_dict = model.state_dict()
     
-    model2 = rein.ReinsResNet(num_classes = config['num_classes'])
+    model2 = timm.create_model('resnet50', pretrained = True, num_classes = config['num_classes'])
     model2.to(device)
-    model2.load_state_dict(state_dict, strict = False)
 
-    model3 = rein.ReinsResNet(num_classes = config['num_classes'])
+    model3 = timm.create_model('resnet50', pretrained = True, num_classes = config['num_classes'])
     model3.to(device)
-    model3.load_state_dict(state_dict, strict = False)
-    # print(model3)
-
+    
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
     model.eval()
     
@@ -66,9 +61,8 @@ def train():
 
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
-    scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer2, lr_decay)
-    scheduler3 = torch.optim.lr_scheduler.MultiStepLR(optimizer3, lr_decay)
-
+    scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
+    scheduler3 = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
 
     saver = timm.utils.CheckpointSaver(model3, optimizer, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
@@ -95,13 +89,11 @@ def train():
             outputs = model.fc(features)
             # outputs = model.linear(outputs)
             outputs2 = model2(inputs)
-            # print(outputs2.shape)
 
             outputs3 = model3(inputs)
-            # print(outputs3.shape)
 
             with torch.no_grad():
-                pred = outputs.max(1).indices
+                pred = (outputs).max(1).indices
                 linear_accurate = (pred==targets)
 
                 pred2 = outputs2.max(1).indices
@@ -139,8 +131,10 @@ def train():
         train_accuracy = correct/total
         train_avg_loss = total_loss/len(train_loader)
 
-        ## validation
+        ## validation\
         model.eval()
+        model2.eval()
+        model3.eval()
         total_loss = 0
         total = 0
         correct = 0
