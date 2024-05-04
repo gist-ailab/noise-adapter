@@ -49,8 +49,8 @@ def train():
     elif args.data == 'dr':
         train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
     elif 'cifar' in args.data:
-        train_loader, valid_loader = utils.get_cifar_noise_dataset(data_path, batch_size = batch_size,  noise_rate=noise_rate)        
-                
+        train_loader, valid_loader = utils.get_cifar_noise_dataset(args.data, data_path, batch_size = batch_size,  noise_rate=noise_rate)
+                  
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
