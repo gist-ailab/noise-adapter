@@ -389,5 +389,15 @@ def get_nihxray(batch_size = 32):
     valid_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
     
+def get_cifar_noise_dataset(path, noise_rate = 0.2, batch_size = 32, seed = 0):
+    from .cifar import CIFAR10, CIFAR100
+    train_transform, test_transform = get_transform()
+    train_data = CIFAR10(path, train=True, transform = train_transform, noise_type = 'symmetric', noise_rate = noise_rate, download=True)
+    valid_data = CIFAR10(path, train=False, transform = test_transform, download=True)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
 if __name__ == '__main__':
     get_nihxray()

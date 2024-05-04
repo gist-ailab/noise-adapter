@@ -101,7 +101,7 @@ def train():
         tuning_config.d_model=768
         # VPT
         tuning_config.vpt_on = True
-        tuning_config.vpt_num = 50
+        tuning_config.vpt_num = 10
 
     if args.net == 'dinov2':
         model_load = dino_variant._base_dino
