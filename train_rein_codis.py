@@ -20,7 +20,7 @@ def train():
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
-    parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
+    parser.add_argument('--noise_rate', '-n', type=float, default=0.35)
     args = parser.parse_args()
 
     config = utils.read_conf('conf/'+args.data+'.json')
@@ -49,7 +49,7 @@ def train():
     elif 'mnist' in args.data:
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'dr':
-        train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
+        train_loader, valid_loader, _ = utils.get_dr(data_path, batch_size = batch_size)
 
     if args.netsize == 's':
         model_load = dino_variant._small_dino
