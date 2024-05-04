@@ -47,7 +47,8 @@ def train():
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'dr':
         train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
-    
+    elif 'cifar' in args.data:
+        train_loader, valid_loader = utils.get_cifar_noise_dataset(data_path, batch_size = batch_size,  noise_rate=noise_rate)
     
     num_samples = {}
     for i in range(config['num_classes']):
