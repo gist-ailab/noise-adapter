@@ -1,11 +1,40 @@
 import torch
 import numpy as np
-from sklearn.metrics import roc_auc_score, f1_score, cohen_kappa_score
+from sklearn.metrics import roc_auc_score, f1_score, cohen_kappa_score, balanced_accuracy_score
 import sklearn.metrics as sk
 
 import torch.nn.functional as F
 
 recall_level_default = 0.95
+
+def validation_balnced_accuracy(model, loader, method, device):
+    pred_list = []
+    target_list = []
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            if method == 'linear':
+                outputs = model(inputs)
+                outputs = model.linear(outputs)
+            elif method == 'rein':
+                features = model.forward_features(inputs)
+                features = features[:, 0, :]
+                outputs = model.linear(features)      
+            else:
+                features = model.forward_features(inputs)
+                features = features[:, 0, :]
+                outputs = model.linear_rein(features)           
+            _, predicted = outputs.max(1)  
+            target_list.append(targets.cpu())
+            pred_list.append(predicted.cpu())
+    target_list = torch.cat(target_list, dim=0)
+    pred_list = torch.cat(pred_list, dim=0)  
+
+    accuracy = balanced_accuracy_score(target_list, pred_list)
+    return accuracy
+
 
 def validation_kohen_kappa_ours(model, loader, device, adapter = 'rein'):
     targets_list = []

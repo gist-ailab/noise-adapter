@@ -74,21 +74,29 @@ def train():
     model.eval()
     
     if 'ours' in args.save_path:
-        kappa_score = utils.validation_kohen_kappa_ours(model, valid_loader, device)
+        # kappa_score = utils.validation_kohen_kappa_ours(model, valid_loader, device)
         accuracy = utils.validation_accuracy_ours(model, valid_loader, device)
         accuracy_fgadr = utils.validation_accuracy_ours(model, fgadr_loader, device)
+        
+        accuracy_b = utils.validation_balnced_accuracy(model, valid_loader, 'ours', device)
+        accuracy_b_fgadr = utils.validation_balnced_accuracy(model, fgadr_loader, 'ours', device)
+
+
     elif 'rein' in args.save_path:
-        kappa_score = utils.validation_kohen_kappa(model, valid_loader, device)
         accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
         accuracy_fgadr = utils.validation_accuracy_rein(model, fgadr_loader, device)
+
+        accuracy_b = utils.validation_balnced_accuracy(model, valid_loader, 'rein', device)
+        accuracy_b_fgadr = utils.validation_balnced_accuracy(model, fgadr_loader, 'rein', device)
     else:
         # Linear or full
         accuracy = utils.validation_accuracy(model, valid_loader, device)
-        kappa_score = utils.validation_kohen_kappa_linear(model, valid_loader, device)
         accuracy_fgadr = utils.validation_accuracy(model, fgadr_loader, device)
 
+        accuracy_b = utils.validation_balnced_accuracy(model, valid_loader, 'linear', device)
+        accuracy_b_fgadr = utils.validation_balnced_accuracy(model, fgadr_loader, 'linear', device)
 
-    print(accuracy, accuracy_fgadr, kappa_score)
+    print(accuracy, accuracy_fgadr, accuracy_b, accuracy_b_fgadr)
 
         
 if __name__ =='__main__':
