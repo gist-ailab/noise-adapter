@@ -333,10 +333,26 @@ def get_dr(path, batch_size = 32):
     aptos_train_data.samples.extend(aptos_valid_data.samples)
     aptos_train_data.samples.extend(aptos_test_data.samples)
 
+    temp = {0: 0, 1:0, 2:0, 3:0, 4:0}
+    for sample in aptos_train_data.samples:
+        temp[sample[1]]+=1
+    print(temp)
+
+    temp = {0: 0, 1:0, 2:0, 3:0, 4:0}
+    for sample in fgadr_data.samples:
+        temp[sample[1]]+=1
+    print(temp)
+
+    import copy
+    total_set = copy.deepcopy(fgadr_data)
+    total_set.samples.extend(aptos_train_data.samples) 
+
     train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
     valid_loader = torch.utils.data.DataLoader(aptos_train_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     fgadr_loader = torch.utils.data.DataLoader(fgadr_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
-    return train_loader, valid_loader, fgadr_loader
+    total_loader = torch.utils.data.DataLoader(total_set, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+
+    return train_loader, valid_loader, fgadr_loader, total_loader
 
 def get_nihxray(batch_size = 32):
     from medmnist import ChestMNIST

@@ -71,7 +71,7 @@ class APTOS2019TwoLabel():
                     label = int(label)
 
                     self.samples.append([img_name, label])
-
+        
     def __len__(self):
         return len(self.samples)
 
