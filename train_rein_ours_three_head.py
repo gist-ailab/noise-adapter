@@ -49,7 +49,8 @@ def train():
         train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
     elif 'cifar' in args.data:
         train_loader, valid_loader = utils.get_cifar_noise_dataset(args.data, data_path, batch_size = batch_size,  noise_rate=noise_rate)
-        
+    elif args.data == 'clothing':
+        train_loader, valid_loader = utils.get_clothing1m_dataset(data_path, batch_size=batch_size)        
     num_samples = {}
     for i in range(config['num_classes']):
         num_samples[i] = 0
