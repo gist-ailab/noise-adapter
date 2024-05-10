@@ -421,7 +421,7 @@ def get_clothing1m_dataset(path, batch_size = 32, seed = 0):
     train_data = torchvision.datasets.ImageFolder(path + '/noisy_train', train_transform)
     valid_data = torchvision.datasets.ImageFolder(path + '/clean_test', test_transform)
     
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 8)
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=False, num_workers = 8)
     valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 

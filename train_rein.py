@@ -53,6 +53,8 @@ def train():
         train_loader, valid_loader = utils.get_cifar_noise_dataset(args.data, data_path, batch_size = batch_size,  noise_rate=noise_rate)
     elif args.data == 'clothing':
         train_loader, valid_loader = utils.get_clothing1m_dataset(data_path, batch_size=batch_size)
+        lr_decay = [5, 10]
+
 
     if args.netsize == 's':
         model_load = dino_variant._small_dino

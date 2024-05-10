@@ -35,7 +35,8 @@ def train():
         os.mkdir(save_path)
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
-
+    num_gradual = 10
+    
     if args.data == 'ham10000':
         train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'aptos':
@@ -54,6 +55,9 @@ def train():
         train_loader, valid_loader = utils.get_cifar_noise_dataset(args.data, data_path, batch_size = batch_size,  noise_rate=noise_rate)
     elif args.data == 'clothing':
         train_loader, valid_loader = utils.get_clothing1m_dataset(data_path, batch_size=batch_size)
+        lr_decay = [5, 10]
+        num_gradual = 1
+
                 
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -96,7 +100,7 @@ def train():
     saver = timm.utils.CheckpointSaver(model1, optimizer1, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
 
-    num_gradual = 10
+
     exponent = 1 # 0.5, 1 or 2; This parameter is equal to c in Tc for R(T) in Co-teaching paper.
     rate_schedule = np.ones(max_epoch) * noise_rate
     rate_schedule[:num_gradual] = np.linspace(0, noise_rate ** exponent, num_gradual)
