@@ -45,6 +45,10 @@ def train():
         train_loader, valid_loader = utils.get_nihxray(batch_size = batch_size)
     elif args.data == 'dr':
         train_loader, valid_loader, fgadr_loader, total_loader = utils.get_dr(data_path, batch_size = batch_size)
+    elif args.data == 'webvision':
+        train_loader, valid_loader = utils.get_webvision(data_path, batch_size=batch_size)
+        fgadr_loader = utils.get_imagenet_loader(data_path, batch_size=batch_size)
+
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -81,8 +85,8 @@ def train():
         accuracy_b = utils.validation_balnced_accuracy(model, valid_loader, 'ours', device)
         accuracy_b_fgadr = utils.validation_balnced_accuracy(model, fgadr_loader, 'ours', device)
 
-        accuracy_total = utils.validation_accuracy_ours(model, total_loader, device)
-        accuracy_total_fgadr = utils.validation_balnced_accuracy(model, total_loader, 'ours', device)
+        # accuracy_total = utils.validation_accuracy_ours(model, total_loader, device)
+        # accuracy_total_fgadr = utils.validation_balnced_accuracy(model, total_loader, 'ours', device)
 
     elif 'rein' in args.save_path:
         accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
@@ -91,8 +95,8 @@ def train():
         accuracy_b = utils.validation_balnced_accuracy(model, valid_loader, 'rein', device)
         accuracy_b_fgadr = utils.validation_balnced_accuracy(model, fgadr_loader, 'rein', device)
 
-        accuracy_total = utils.validation_accuracy_rein(model, total_loader, device)
-        accuracy_total_fgadr = utils.validation_balnced_accuracy(model, total_loader, 'rein', device)
+        # accuracy_total = utils.validation_accuracy_rein(model, total_loader, device)
+        # accuracy_total_fgadr = utils.validation_balnced_accuracy(model, total_loader, 'rein', device)
     else:
         # Linear or full
         accuracy = utils.validation_accuracy(model, valid_loader, device)
@@ -101,9 +105,9 @@ def train():
         accuracy_b = utils.validation_balnced_accuracy(model, valid_loader, 'linear', device)
         accuracy_b_fgadr = utils.validation_balnced_accuracy(model, fgadr_loader, 'linear', device)
 
-        accuracy_total = utils.validation_accuracy(model, total_loader, device)
-        accuracy_total_fgadr = utils.validation_balnced_accuracy(model, total_loader, 'linear', device)
-    print(accuracy, accuracy_fgadr, accuracy_b, accuracy_b_fgadr, accuracy_total, accuracy_total_fgadr)
+        # accuracy_total = utils.validation_accuracy(model, total_loader, device)
+        # accuracy_total_fgadr = utils.validation_balnced_accuracy(model, total_loader, 'linear', device)
+    print(accuracy, accuracy_fgadr, accuracy_b, accuracy_b_fgadr) #, accuracy_total, accuracy_total_fgadr)
 
         
 if __name__ =='__main__':

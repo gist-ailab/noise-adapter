@@ -434,5 +434,13 @@ def get_webvision(path, batch_size= 32):
     valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
+def get_imagenet_loader(path, batch_size= 32):
+    train_transform, test_transform = get_transform()
+    valid_data = torchvision.datasets.ImageFolder(path + '/imagenet_val', test_transform)
+    
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return valid_loader
+
+
 if __name__ == '__main__':
     get_nihxray()
