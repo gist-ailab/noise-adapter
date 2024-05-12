@@ -57,7 +57,8 @@ def train():
         train_loader, valid_loader = utils.get_clothing1m_dataset(data_path, batch_size=batch_size)
         lr_decay = [5, 10]
         num_gradual = 1
-
+    elif args.data == 'webvision':
+        train_loader, valid_loader = utils.get_webvision(data_path, batch_size=batch_size)   
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino

@@ -52,7 +52,9 @@ def train():
     elif args.data == 'clothing':
         train_loader, valid_loader = utils.get_clothing1m_dataset(data_path, batch_size=batch_size)   
         lr_decay = [5, 10]
-
+    elif args.data == 'webvision':
+        train_loader, valid_loader = utils.get_webvision(data_path, batch_size=batch_size)   
+        
     num_samples = {}
     for i in range(config['num_classes']):
         num_samples[i] = 0
