@@ -127,6 +127,7 @@ def train():
             features2 = features2[:, 0, :]
             outputs2 = model2.linear(features2)
 
+
             loss_1, loss_2 = loss_coteaching(outputs1, outputs2, targets, rate_schedule[epoch])
             optimizer1.zero_grad()
             loss_1.backward(retain_graph=True)

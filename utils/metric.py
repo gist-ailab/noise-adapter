@@ -226,7 +226,7 @@ def validation_accuracy_shared(model, loader, device):
 
 
 
-def validation_accuracy_ours(model, loader, device, adapter='rein'):
+def validation_accuracy_ours(model, loader, device, adapter='rein', use_rein1 = False):
     total = 0
     correct = 0
     
@@ -239,6 +239,31 @@ def validation_accuracy_ours(model, loader, device, adapter='rein'):
                 features = features[:, 0, :]
             outputs = model.linear_rein(features)
             outputs = outputs #+ outputs_
+
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
+
+def validation_accuracy_ours_head3(model, loader, device, adapter='rein', use_rein1 = False):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            if use_rein1:
+                features = model.forward_features1(inputs)
+                if adapter == 'rein':
+                    features = features[:, 0, :]
+                outputs = model.linear_rein1(features)
+            else:
+                features = model.forward_features2(inputs)
+                if adapter == 'rein':
+                    features = features[:, 0, :]
+                outputs = model.linear_rein2(features)
 
             total += targets.size(0)
             _, predicted = outputs.max(1)  
