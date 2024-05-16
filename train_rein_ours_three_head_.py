@@ -132,7 +132,7 @@ def train():
                 linear_accurate2 = (pred2==targets)
 
             loss_rein = linear_accurate*criterion(outputs, targets)
-            loss_rein2 = linear_accurate2*criterion(outputs2, targets)
+            loss_rein2 = (linear_accurate2*criterion(outputs2, targets) + linear_accurate2*criterion(outputs2, targets))/2
             loss_linear = criterion(outputs_, targets)
             loss = loss_linear.mean()+loss_rein.mean()+ loss_rein2.mean()
             loss.backward()            
