@@ -46,7 +46,7 @@ def train():
     elif 'mnist' in args.data:
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'dr':
-        train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
+        train_loader, valid_loader, _, _ = utils.get_dr(data_path, batch_size = batch_size)
     elif 'cifar' in args.data:
         train_loader, valid_loader = utils.get_cifar_noise_dataset(args.data, data_path, batch_size = batch_size,  noise_rate=noise_rate)
     elif args.data == 'clothing':
@@ -132,7 +132,7 @@ def train():
                 linear_accurate2 = (pred2==targets)
 
             loss_rein = linear_accurate*criterion(outputs, targets)
-            loss_rein2 = (linear_accurate2*criterion(outputs2, targets) + linear_accurate2*criterion(outputs2, targets))/2
+            loss_rein2 = (linear_accurate2*criterion(outputs2, targets) + linear_accurate*criterion(outputs2, targets))/2
             loss_linear = criterion(outputs_, targets)
             loss = loss_linear.mean()+loss_rein.mean()+ loss_rein2.mean()
             loss.backward()            
