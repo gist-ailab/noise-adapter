@@ -64,12 +64,14 @@ def train():
     dino_state_dict = model.state_dict()
 
     if 'rein' in args.save_path:
-        model = rein.ReinsDinoVisionTransformer(
+        model = rein.ReinsDinoVisionTransformer_3_head(
             **variant
         )
     model.load_state_dict(dino_state_dict, strict=False)
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-    model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
+    model.linear_rein1 = nn.Linear(variant['embed_dim'], config['num_classes'])
+    model.linear_rein2 = nn.Linear(variant['embed_dim'], config['num_classes'])
+
     model.to(device)
     
     model.load_state_dict(torch.load(os.path.join(save_path, 'last.pth.tar'))['state_dict'], strict=False)
@@ -79,13 +81,13 @@ def train():
     
     if 'ours' in args.save_path:
         # kappa_score = utils.validation_kohen_kappa_ours(model, valid_loader, device)
-        accuracy = utils.validation_accuracy_ours(model, valid_loader, device)
-        accuracy_fgadr = utils.validation_accuracy_ours(model, fgadr_loader, device)
+        accuracy = utils.validation_accuracy_ours_head3(model, valid_loader, device)
+        accuracy_fgadr = utils.validation_accuracy_ours_head3(model, fgadr_loader, device)
         
-        accuracy_b = utils.validation_balnced_accuracy(model, valid_loader, 'ours', device)
-        accuracy_b_fgadr = utils.validation_balnced_accuracy(model, fgadr_loader, 'ours', device)
+        # accuracy_b = utils.validation_accuracy_ours_head3(model, valid_loader, 'ours', device)
+        # accuracy_b_fgadr = utils.validation_balnced_accuracy(model, fgadr_loader, 'ours', device)
 
-        # accuracy_total = utils.validation_accuracy_ours(model, total_loader, device)
+        accuracy_total = utils.validation_accuracy_ours_head3(model, total_loader, device)
         # accuracy_total_fgadr = utils.validation_balnced_accuracy(model, total_loader, 'ours', device)
 
     elif 'rein' in args.save_path:
@@ -107,8 +109,8 @@ def train():
 
         # accuracy_total = utils.validation_accuracy(model, total_loader, device)
         # accuracy_total_fgadr = utils.validation_balnced_accuracy(model, total_loader, 'linear', device)
-    print(accuracy, accuracy_fgadr, accuracy_b, accuracy_b_fgadr) #, accuracy_total, accuracy_total_fgadr)
-
+    # print(accuracy, accuracy_fgadr, accuracy_b, accuracy_b_fgadr) #, accuracy_total, accuracy_total_fgadr)
+    print(accuracy, accuracy_fgadr, accuracy_total)
         
 if __name__ =='__main__':
     train()
