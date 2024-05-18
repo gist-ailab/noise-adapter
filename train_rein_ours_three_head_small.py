@@ -130,7 +130,7 @@ def train():
                 linear_accurate = (pred==targets)
 
                 loss_ = criterion(outputs, targets)
-                ind_sorted = np.argsort(loss_.cpu().data).cuda()
+                ind_sorted = np.argsort(loss_.cpu().data).to(device)
                 num_remember = int(remember_rate * len(ind_sorted))
                 ind_update=ind_sorted[:num_remember]
 
