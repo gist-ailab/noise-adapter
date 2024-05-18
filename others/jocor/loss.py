@@ -17,10 +17,9 @@ def kl_loss_compute(pred, soft_targets, reduce=True):
 
 
 
-def loss_jocor(y_1, y_2, t, forget_rate, co_lambda=0.1):
-
-    loss_pick_1 = F.cross_entropy(y_1, t, reduce = False) * (1-co_lambda)
-    loss_pick_2 = F.cross_entropy(y_2, t, reduce = False) * (1-co_lambda)
+def loss_jocor(y_1, y_2, t, forget_rate, co_lambda=0.1, class_weight = None):
+    loss_pick_1 = F.cross_entropy(y_1, t, reduce = False, weight=class_weight) * (1-co_lambda)
+    loss_pick_2 = F.cross_entropy(y_2, t, reduce = False, weight=class_weight) * (1-co_lambda)
     loss_pick = (loss_pick_1 + loss_pick_2 + co_lambda * kl_loss_compute(y_1, y_2,reduce=False) + co_lambda * kl_loss_compute(y_2, y_1, reduce=False)).cpu()
 
 

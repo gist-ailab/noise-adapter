@@ -34,12 +34,12 @@ def js_loss_compute(pred, soft_targets, reduce=True):
     else:
         return torch.sum(js, 1)
 
-def loss_codis(y_1, y_2, t, forget_rate, co_lambda=0.1):
-    loss_1 = F.cross_entropy(y_1, t, reduction='none') - co_lambda * js_loss_compute(y_1, y_2,reduce=False)
+def loss_codis(y_1, y_2, t, forget_rate, co_lambda=0.1, class_weight = None):
+    loss_1 = F.cross_entropy(y_1, t, reduction='none', weight=class_weight) - co_lambda * js_loss_compute(y_1, y_2,reduce=False)
     ind_1_sorted = np.argsort(loss_1.cpu().data).cuda()
     loss_1_sorted = loss_1[ind_1_sorted]
 
-    loss_2 = F.cross_entropy(y_2, t, reduction='none') - co_lambda * js_loss_compute(y_1, y_2,reduce=False)
+    loss_2 = F.cross_entropy(y_2, t, reduction='none', weight=class_weight) - co_lambda * js_loss_compute(y_1, y_2,reduce=False)
     ind_2_sorted = np.argsort(loss_2.cpu().data).cuda()
     loss_2_sorted = loss_2[ind_2_sorted]
 

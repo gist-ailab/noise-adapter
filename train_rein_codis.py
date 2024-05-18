@@ -102,6 +102,12 @@ def train():
     rate_schedule = np.ones(max_epoch) * noise_rate
     rate_schedule[:num_gradual] = np.linspace(0, noise_rate, num_gradual)
 
+    if args.data == 'dr':
+        num_samples = {0: 25810, 1: 2443, 2: 5292, 3: 873, 4: 708}
+        class_weight = torch.tensor([1-num_samples[x]/sum(num_samples.values()) for x in num_samples]).to(device)
+        print(class_weight)
+    else:
+        class_weight = None
     avg_accuracy = 0.0
     for epoch in range(max_epoch):
         ## training
@@ -124,7 +130,7 @@ def train():
             outputs2 = model2.linear(features2_)
 
             
-            loss_1, loss_2 = criterion(outputs1, outputs2, targets, rate_schedule[epoch])
+            loss_1, loss_2 = criterion(outputs1, outputs2, targets, rate_schedule[epoch], class_weight=class_weight)
             optimizer1.zero_grad()
             loss_1.backward(retain_graph=True)
             optimizer1.step()

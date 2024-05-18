@@ -68,11 +68,17 @@ def train():
     model = torch.hub.load('facebookresearch/dinov2', model_load)
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
-    
-    
+
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
-    
+        
+    if args.data == 'dr':
+        num_samples = {0: 25810, 1: 2443, 2: 5292, 3: 873, 4: 708}
+        class_weight = torch.tensor([1-num_samples[x]/sum(num_samples.values()) for x in num_samples]).to(device)
+        print(class_weight)
+        criterion = torch.nn.CrossEntropyLoss(weight=class_weight)
+
+
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay = 1e-5)
 

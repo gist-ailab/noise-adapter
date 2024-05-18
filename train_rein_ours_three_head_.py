@@ -46,7 +46,7 @@ def train():
     elif 'mnist' in args.data:
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'dr':
-        train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
+        train_loader, valid_loader,_,_ = utils.get_dr(data_path, batch_size = batch_size)
     elif 'cifar' in args.data:
         train_loader, valid_loader = utils.get_cifar_noise_dataset(args.data, data_path, batch_size = batch_size,  noise_rate=noise_rate)
     elif args.data == 'clothing':
@@ -55,14 +55,15 @@ def train():
     elif args.data == 'webvision':
         train_loader, valid_loader = utils.get_webvision(data_path, batch_size=batch_size)   
         
-    num_samples = {}
-    for i in range(config['num_classes']):
-        num_samples[i] = 0
-    for sample in train_loader.dataset:
-        num_samples[sample[1]]+=1
-    print(num_samples)
-    
-    class_weight = torch.tensor([sum(num_samples.values())/num_samples[x] for x in num_samples])
+    # num_samples = {}
+    # for i in range(config['num_classes']):
+    #     num_samples[i] = 0
+    # for sample in train_loader.dataset:
+    #     num_samples[sample[1]]+=1
+    # print(num_samples)
+
+    num_samples = {0: 25810, 1: 2443, 2: 5292, 3: 873, 4: 708}
+    class_weight = torch.tensor([1-num_samples[x]/sum(num_samples.values()) for x in num_samples]).to(device)
     print(class_weight)
         
     if args.netsize == 's':
@@ -87,7 +88,7 @@ def train():
     model.linear_rein2 = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
-    criterion = torch.nn.CrossEntropyLoss(reduction='none')
+    criterion = torch.nn.CrossEntropyLoss(reduction='none', weight=class_weight)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
 
@@ -132,7 +133,7 @@ def train():
                 linear_accurate2 = (pred2==targets)
 
             loss_rein = linear_accurate*criterion(outputs, targets)
-            loss_rein2 = (linear_accurate2*criterion(outputs2, targets) + linear_accurate2*criterion(outputs2, targets))/2
+            loss_rein2 = linear_accurate2*criterion(outputs2, targets)
             loss_linear = criterion(outputs_, targets)
             loss = loss_linear.mean()+loss_rein.mean()+ loss_rein2.mean()
             loss.backward()            

@@ -95,7 +95,13 @@ def train():
     saver = timm.utils.CheckpointSaver(model1, optimizer, checkpoint_dir= save_path, max_history = 1) 
     print(train_loader.dataset[0][0].shape)
 
-    
+    if args.data == 'dr':
+        num_samples = {0: 25810, 1: 2443, 2: 5292, 3: 873, 4: 708}
+        class_weight = torch.tensor([1-num_samples[x]/sum(num_samples.values()) for x in num_samples]).to(device)
+        print(class_weight)
+    else:
+        class_weight = None
+
     exponent = 1 # 0.5, 1 or 2; This parameter is equal to c in Tc for R(T) in Co-teaching paper.
     rate_schedule = np.ones(max_epoch) * noise_rate
     rate_schedule[:num_gradual] = np.linspace(0, noise_rate ** exponent, num_gradual)
@@ -125,7 +131,7 @@ def train():
             outputs2 = model2.linear(features2)
 
 
-            loss_1, loss_2 = criterion(outputs1, outputs2, targets, rate_schedule[epoch])
+            loss_1, loss_2 = criterion(outputs1, outputs2, targets, rate_schedule[epoch], class_weight=class_weight)
             loss_1.backward()            
             optimizer.step()
 
