@@ -15,8 +15,10 @@ In this study, we introduce Cufit, a curriculum fine-tuning paradigm of vision f
    Some public datasets are required to be downloaded for running evaluation. Required dataset can be downloaded in following links:    
    - [HAM10000](https://challenge.isic-archive.com/data/#2018)
      - Download the training data and test data of Task 3.
+     - Use the ham10000.py to create organized dataset folder.
    - [APTOS-2019](https://www.kaggle.com/c/aptos2019-blindness-detection/data)
      - Please use the "Download All" button.
+     - You can directly use downloaded files for our code.
    - CIFAR10 and 100 will be automatically downloaded.
 
 ### Config file need to be changed for your path to download. For example,
