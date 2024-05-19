@@ -123,7 +123,6 @@ def train():
             outputs2 = model2.linear_rein(features_rein2)
 
             with torch.no_grad():
-                # features_ = model.forward_features_no_rein(inputs)
                 features_ = model.forward_features_no_rein(inputs)
                 features_ = features_[:, 0, :]
             outputs_ = model.linear(features_)
@@ -170,22 +169,18 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
-        valid_accuracy = utils.validation_accuracy_ours(model2, valid_loader, device)
-        valid_accuracy_ = utils.validation_accuracy_ours(model, valid_loader, device)
-        valid_accuracy_linear = utils.validation_accuracy_linear(model, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy(model2, valid_loader, device)
+        valid_accuracy_ = utils.validation_accuracy(model, valid_loader, device)
+        valid_accuracy_linear = utils.validation_accuracy(model, valid_loader, device, mode='no_rein')
         
         scheduler.step()
         scheduler2.step()
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
-            kappa =  utils.validation_kohen_kappa_ours(model2, valid_loader, device)
-            avg_kappa += kappa
         saver.save_checkpoint(epoch, metric = valid_accuracy)
         print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID_2 [acc - {:.4f}], VALID_1 [acc - {:.4f}], VALID(linear) [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy, valid_accuracy_, valid_accuracy_linear))
         print(scheduler.get_last_lr())
     with open(os.path.join(save_path, 'avgacc.txt'), 'w') as f:
         f.write(str(avg_accuracy/10))
-        f.write('|')
-        f.write(str(avg_kappa/10))
 if __name__ =='__main__':
     train()

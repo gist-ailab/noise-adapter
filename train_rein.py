@@ -63,7 +63,7 @@ def train():
         **variant
     )
     model.load_state_dict(dino_state_dict, strict=False)
-    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+    model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
     print(model)
@@ -117,7 +117,7 @@ def train():
         total = 0
         correct = 0
 
-        valid_accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy(model, valid_loader, device)
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
         scheduler.step()

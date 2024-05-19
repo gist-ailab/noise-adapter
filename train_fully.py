@@ -106,7 +106,7 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
-        valid_accuracy = utils.validation_accuracy(model, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy(model, valid_loader, device, mode='linear')
         scheduler.step()
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
