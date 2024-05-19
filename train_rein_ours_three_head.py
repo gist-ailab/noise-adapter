@@ -35,25 +35,15 @@ def train():
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
+
     if args.data == 'ham10000':
         train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
     elif args.data == 'aptos':
         train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
-    elif args.data == 'idrid':
-        train_loader, valid_loader = utils.get_idrid_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
-    elif args.data == 'chaoyang':
-        train_loader, valid_loader = utils.get_chaoyang_dataset(data_path, batch_size = batch_size)
     elif 'mnist' in args.data:
         train_loader, valid_loader = utils.get_mnist_noise_dataset(args.data, noise_rate=noise_rate, batch_size = batch_size)
-    elif args.data == 'dr':
-        train_loader, valid_loader = utils.get_dr(data_path, batch_size = batch_size)
     elif 'cifar' in args.data:
         train_loader, valid_loader = utils.get_cifar_noise_dataset(args.data, data_path, batch_size = batch_size,  noise_rate=noise_rate)
-    elif args.data == 'clothing':
-        train_loader, valid_loader = utils.get_clothing1m_dataset(data_path, batch_size=batch_size)   
-        lr_decay = [5, 10]
-    elif args.data == 'webvision':
-        train_loader, valid_loader = utils.get_webvision(data_path, batch_size=batch_size)   
         
     num_samples = {}
     for i in range(config['num_classes']):

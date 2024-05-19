@@ -1,0 +1,7 @@
+{
+    "epoch" : "100",
+    "id_dataset" : "./data/cifar10",
+    "batch_size" : 32,
+    "save_path" : "./checkpoints/CIFAR10/",
+    "num_classes" : 10
+}
