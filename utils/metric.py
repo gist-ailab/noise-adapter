@@ -1,29 +1,107 @@
 import torch
 import numpy as np
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, f1_score, cohen_kappa_score, balanced_accuracy_score
 import sklearn.metrics as sk
 
 import torch.nn.functional as F
 
 recall_level_default = 0.95
 
-def validation_accuracy_cluster(model, loader, device):
-    total = 0
-    correct = 0
+def validation_balnced_accuracy(model, loader, method, device):
+    pred_list = []
+    target_list = []
     
     model.eval()
     with torch.no_grad():
-        for batch_idx, (inputs, targets, cluster_ids, cluster_centers) in enumerate(loader):
-            inputs, targets, cluster_ids, cluster_centers = inputs.to(device), targets.to(device), cluster_ids.to(device), cluster_centers.to(device)
-
-            outputs = model(inputs)
-            #print(outputs.shape)
-            total += targets.size(0)
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            if method == 'linear':
+                outputs = model(inputs)
+                outputs = model.linear(outputs)
+            elif method == 'rein':
+                features = model.forward_features(inputs)
+                features = features[:, 0, :]
+                outputs = model.linear(features)      
+            else:
+                features = model.forward_features(inputs)
+                features = features[:, 0, :]
+                outputs = model.linear_rein(features)           
             _, predicted = outputs.max(1)  
-            correct += predicted.eq(targets).sum().item()
-    valid_accuracy = correct/total
-    return valid_accuracy
+            target_list.append(targets.cpu())
+            pred_list.append(predicted.cpu())
+    target_list = torch.cat(target_list, dim=0)
+    pred_list = torch.cat(pred_list, dim=0)  
 
+    accuracy = balanced_accuracy_score(target_list, pred_list)
+    return accuracy
+
+
+def validation_kohen_kappa_ours(model, loader, device, adapter = 'rein'):
+    targets_list = []
+    preds_list = []
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features(inputs)
+            if adapter == 'rein':
+                features = features[:, 0, :]
+            outputs = model.linear_rein(features) # should be changed to linear_rein for reinfn
+            pred = outputs.max(1).indices
+
+            targets_list.append(targets.cpu().view(-1))
+            preds_list.append(pred.cpu().view(-1))
+            # print(batch_idx, pred.cpu().view(-1))
+    targets_list = torch.cat(targets_list)
+    preds_list = torch.cat(preds_list)
+    print(targets_list.shape, preds_list.shape)
+
+    kappa = cohen_kappa_score(targets_list.numpy(), preds_list.numpy(), weights = 'quadratic')
+    return kappa
+
+def validation_kohen_kappa(model, loader, device):
+    targets_list = []
+    preds_list = []
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features(inputs)
+            features = features[:, 0, :]
+            outputs = model.linear(features) # should be changed to linear_rein for reinfn
+            pred = outputs.max(1).indices
+
+            targets_list.append(targets.cpu().view(-1))
+            preds_list.append(pred.cpu().view(-1))
+            # print(batch_idx, pred.cpu().view(-1))
+    targets_list = torch.cat(targets_list)
+    preds_list = torch.cat(preds_list)
+    print(targets_list.shape, preds_list.shape)
+
+    kappa = cohen_kappa_score(targets_list.numpy(), preds_list.numpy(), weights = 'quadratic')
+    return kappa
+
+
+def validation_kohen_kappa_linear(model, loader, device):
+    targets_list = []
+    preds_list = []
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model(inputs)
+            outputs = model.linear(features) # should be changed to linear_rein for reinfn
+            pred = outputs.max(1).indices
+
+            targets_list.append(targets.cpu().view(-1))
+            preds_list.append(pred.cpu().view(-1))
+            # print(batch_idx, pred.cpu().view(-1))
+    targets_list = torch.cat(targets_list)
+    preds_list = torch.cat(preds_list)
+    print(targets_list.shape, preds_list.shape)
+
+    kappa = cohen_kappa_score(targets_list.numpy(), preds_list.numpy(), weights = 'quadratic')
+    return kappa
 
 def validation_accuracy(model, loader, device):
     total = 0
@@ -34,6 +112,7 @@ def validation_accuracy(model, loader, device):
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
+            outputs = model.linear(outputs)
             #print(outputs.shape)
             total += targets.size(0)
             _, predicted = outputs.max(1)  
@@ -41,7 +120,29 @@ def validation_accuracy(model, loader, device):
     valid_accuracy = correct/total
     return valid_accuracy
 
-def validation_accuracy_norm(model, loader, device):
+def get_f1_score(model, loader, device):
+    y_pred = []
+    y_true = []
+    
+    m = torch.nn.Sigmoid()
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = model(inputs)
+            outputs = model.linear(outputs)
+            outputs = m(outputs) > 0.5
+            #print(outputs.shape)
+            y_pred.extend(outputs.cpu())
+            y_true.extend(targets.cpu())
+    y_pred = torch.stack(y_pred)
+    y_true = torch.stack(y_true)
+    # print(y_pred)
+    f1 = f1_score(y_true, y_pred, average='micro')
+    return f1
+
+
+def validation_accuracy_resnet(model, loader, device):
     total = 0
     correct = 0
     
@@ -49,22 +150,7 @@ def validation_accuracy_norm(model, loader, device):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)
-            x = model.conv1(inputs)
-            x = model.bn1(x)
-            x = model.act1(x)
-            x = model.maxpool(x)
-
-            x = model.layer1(x)                 
-            x = model.layer2(x)            
-            x = model.layer3(x)
-            xgap = F.adaptive_avg_pool2d(x, [1,1])
-            norm = torch.norm(xgap, dim=1, keepdim=True)      
-            x = x/norm
-            # x = attention(x)
-            
-            x = model.layer4(x) # Batch, 512, 4, 4
-            x = model.global_pool(x).view(-1, 512)
-            outputs = model.fc(x)
+            outputs = model(inputs)
             #print(outputs.shape)
             total += targets.size(0)
             _, predicted = outputs.max(1)  
@@ -72,7 +158,50 @@ def validation_accuracy_norm(model, loader, device):
     valid_accuracy = correct/total
     return valid_accuracy
 
-def validation_accuracy_norm_wrn(model, loader, device):
+
+def validation_accuracy_rein(model, loader, device, adapter='rein', no_rein = False):
+    total = 0
+    correct = 0
+    
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features_no_rein(inputs) if no_rein else model.forward_features(inputs)
+            if adapter == 'rein':
+                features = features[:, 0, :]
+            outputs = model.linear(features)
+
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
+
+def get_f1_score_rein(model, loader, device):
+    y_pred = []
+    y_true = []
+    
+    m = torch.nn.Sigmoid()
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features(inputs)
+            features = features[:, 0, :]
+            outputs = model.linear(features)
+            outputs = m(outputs) > 0.5
+            #print(outputs.shape)
+            y_pred.extend(outputs.cpu())
+            y_true.extend(targets.cpu())
+    y_pred = torch.stack(y_pred)
+    y_true = torch.stack(y_true)
+    # print(y_pred)
+    f1 = f1_score(y_true, y_pred, average='micro')
+    return f1
+
+def validation_accuracy_shared(model, loader, device):
     total = 0
     correct = 0
     
@@ -80,37 +209,15 @@ def validation_accuracy_norm_wrn(model, loader, device):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)
-            out = model.conv1(inputs)
-            out = model.block1(out)
-            out = model.block2(out)
+            features = model.forward_features(inputs)
+            features = features[:, 0, :]
+            outputs = model.linear(features)
 
-            out = model.block3.layer[0].bn1(out)
-            out = model.block3.layer[0].relu1(out)
-            outgap = F.adaptive_avg_pool2d(out, [1,1])
-            norm = torch.norm(outgap, dim=1, keepdim=True)      
-            out = out/norm
-
-            out2 = out     
+            features = model.forward_features_no_rein(inputs)
+            features = features[:, 0, :]
+            outputs_ = model.linear(features)
+            outputs = outputs+outputs_
             
-            out = model.block3.layer[0].conv1(out)
-            out = model.block3.layer[0].bn2(out)
-            out = model.block3.layer[0].relu2(out)
-            out = model.block3.layer[0].conv2(out)
-            out = torch.add(model.block3.layer[0].convShortcut(out2), out)
-
-            # out = model.block3.layer[0](out)
-            out = model.block3.layer[1](out)    
-            out = model.block3.layer[2](out)
-            out = model.block3.layer[3](out)
-            # out = model.block3.layer[4](out)
-            # out = model.block3.layer[5](out)
-
-
-            out = model.relu(model.bn1(out))
-            out = F.avg_pool2d(out, 8)
-            out = out.view(-1, model.nChannels)
-            outputs = model.fc(out)
-            #print(outputs.shape)
             total += targets.size(0)
             _, predicted = outputs.max(1)  
             correct += predicted.eq(targets).sum().item()
@@ -118,6 +225,90 @@ def validation_accuracy_norm_wrn(model, loader, device):
     return valid_accuracy
 
 
+
+def validation_accuracy_ours(model, loader, device, adapter='rein', use_rein1 = False):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features(inputs)
+            if adapter == 'rein':
+                features = features[:, 0, :]
+            outputs = model.linear_rein(features)
+            outputs = outputs #+ outputs_
+
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
+
+def validation_accuracy_ours_head3(model, loader, device, adapter='rein', use_rein1 = False):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            if use_rein1:
+                features = model.forward_features1(inputs)
+                if adapter == 'rein':
+                    features = features[:, 0, :]
+                outputs = model.linear_rein1(features)
+            else:
+                features = model.forward_features2(inputs)
+                if adapter == 'rein':
+                    features = features[:, 0, :]
+                outputs = model.linear_rein2(features)
+
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
+
+def validation_accuracy_rein_full(model, loader, device):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features(inputs)
+            features = features[:, 1:, :].mean(1)
+            outputs = model.linear(features)
+            outputs = outputs #+ outputs_
+
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
+
+
+def validation_accuracy_linear(model, loader, device, adapter='rein'):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            features = model.forward_features_no_rein(inputs)
+            if adapter == 'rein':
+                features = features[:, 0, :]
+            outputs = model.linear(features)
+
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
 
 def stable_cumsum(arr, rtol=1e-05, atol=1e-08):
     """Use high precision for cumsum and check that final value matches sum

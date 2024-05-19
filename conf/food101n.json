@@ -1,7 +1,0 @@
-{
-    "epoch" : "100",
-    "id_dataset" : "/SSDe/yyg/data/Food-101N_release",
-    "batch_size" : 64,
-    "save_path" : "/SSDe/yyg/RR/Food101N/",
-    "num_classes" : 101
-}
