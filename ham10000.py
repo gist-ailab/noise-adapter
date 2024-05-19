@@ -52,5 +52,5 @@ if __name__ == '__main__':
 
     # Create test folder
     create_folder('test')
-    read_and_move(test_image_gt_csv, test_image_folder)
+    read_and_move(test_image_gt_csv, test_image_folder, is_train=False)
         
