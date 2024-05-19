@@ -1,6 +1,4 @@
-# Jigsaw training for improving OOD
-Official Implementation of the **"Exploring the Use of Jigsaw Puzzles in Out-of-Distribution Detection (Submitted to Computer Vision and Image Understanding)"**. 
-
+# Curriculum Fine-tuning of Vision Foundation Model for Medical Image Classification in the Presence of Noisy Labels.
 In this study, we introduce Cufit, a curriculum fine-tuning paradigm of vision foundation model for medical image classification under label noise, based on linear probing and adapter modules.
 
 ---
@@ -15,8 +13,8 @@ In this study, we introduce Cufit, a curriculum fine-tuning paradigm of vision f
 
 ## Dataset Preparation
    Some public datasets are required to be downloaded for running evaluation. Required dataset can be downloaded in following links:    
-   - [HAM10000](https://www.robots.ox.ac.uk/~vgg/data/dtd/)
-   - [APTOS-2019](https://www.dropbox.com/s/fhtsw1m3qxlwj6h/LSUN.tar.gz)
+   - [HAM10000](https://challenge.isic-archive.com/data/#2018)
+   - [APTOS-2019](https://www.kaggle.com/c/aptos2019-blindness-detection/data)
    - CIFAR10 and 100 will be automatically downloaded.
 
 ### Config file need to be changed for your path to download. For example,
@@ -41,11 +39,6 @@ for example,
 ~~~
 python train_rein_ours_three_head.py --data ham10000 --noise_rate 0.4 --netsize s --gpu 0 --save_path dinov2s_rein_3module
 ~~~
-Other baselines full-training, linear probing, and adapter only are also available.
+Other baselines full-training, linear probing, and adapter only are also available. Please use train_fully.py, train_linear.py, and train_rein.py.
 
-# License
-The source code of this repository is released only for academic use. See the [license](LICENSE) file for details.
-
-# Acknowledgement
-This work was partially supported by Institute of Information \& communications Technology Planning \& Evaluation (IITP) grant funded by the Korea government (MSIT) (No. 2022-0-00951, Development of Uncertainty-Aware Agents Learning by Asking Questions) and by ICT R\&D program of MSIT/IITP[2020-0-00857, Development of Cloud Robot Intelligence Augmentation, Sharing and Framework Technology to Integrate and Enhance the Intelligence of Multiple Robots].
 
