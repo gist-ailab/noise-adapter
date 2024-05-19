@@ -26,9 +26,9 @@ In this study, we introduce Cufit, a curriculum fine-tuning paradigm of vision f
 # conf/HAM10000.json
 {
     "epoch" : "100",
-    "id_dataset" : "./cifar10",   # Your path to HAM10000 dataset
+    "id_dataset" : "./ham10000",   # Your path to HAM10000 dataset
     "batch_size" : 32,
-    "save_path" : "./cifar10/",   # Your path to checkpoint
+    "save_path" : "./HAM10000/",   # Your path to checkpoint
     "num_classes" : 7
 }
 ~~~
