@@ -41,5 +41,6 @@ def validation_accuracy(model, loader, device, mode = 'rein'):
             outputs = out(model, inputs)
             _, predicted = outputs.max(1)  
             correct += predicted.eq(targets).sum().item()
+            total += targets.size(0)
     valid_accuracy = correct/total
     return valid_accuracy
