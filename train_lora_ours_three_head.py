@@ -77,13 +77,10 @@ def train():
         model_load = dino_variant._large_dino
         variant = dino_variant._large_variant
     # model = timm.create_model(network, pretrained=True, num_classes=2) 
-    model = torch.hub.load('facebookresearch/dinov2', model_load)
-    dino_state_dict = model.state_dict()
+    dino = torch.hub.load('facebookresearch/dinov2', model_load)
+    dino_state_dict = dino.state_dict()
 
-    model = rein.ReinsDinoVisionTransformer(
-        **variant
-    )
-    model.load_state_dict(dino_state_dict, strict=False)
+    model = rein.LoRADinoVisionTransformer(dino)
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
