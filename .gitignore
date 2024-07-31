@@ -2,6 +2,9 @@
 *.tar
 *.txt
 *.pyc
+*.pth
+*.zip
+*.jpg
 
 data/*
-*.pth
+checkpoints/*

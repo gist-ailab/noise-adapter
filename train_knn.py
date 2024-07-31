@@ -8,17 +8,19 @@ import numpy as np
 import utils
 
 import random
+from sklearn.metrics import f1_score
+from sklearn.neighbors import KNeighborsClassifier
 
 import dino_variant
-import rein
 
 
-def evalaute():
+def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', '-d', type=str)
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
+    parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
     args = parser.parse_args()
 
     config = utils.read_conf('conf/'+args.data+'.json')
@@ -27,7 +29,12 @@ def evalaute():
     data_path = config['id_dataset']
     batch_size = int(config['batch_size'])
     max_epoch = int(config['epoch'])
-    noise_rate = 0.0
+    noise_rate = args.noise_rate
+
+    if not os.path.exists(save_path):
+        os.mkdir(save_path)
+
+    lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
     if args.data == 'ham10000':
         train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
@@ -49,40 +56,34 @@ def evalaute():
         model_load = dino_variant._large_dino
         variant = dino_variant._large_variant
 
-
-    if 'linear' in args.save_path:
-        model = torch.hub.load('facebookresearch/dinov2', model_load)
-        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-        model.load_state_dict(torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict'], strict=True)
-    elif 'rein' in args.save_path:
-        model = rein.ReinsDinoVisionTransformer(
-            **variant
-        )
-        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-        model.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
-
-        model.load_state_dict(torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict'], strict=True) #TEMP
+    model = torch.hub.load('facebookresearch/dinov2', model_load)
+    model.neigh = KNeighborsClassifier(n_neighbors=15)
     model.to(device)
     model.eval()
-    
-    total=0
-    correct = 0
+
+    features_list = []
+    targets_list = []
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         inputs, targets = inputs.to(device), targets.to(device)
-        
+                
         with torch.no_grad():
-            if type(model).__name__ == 'ReinsDinoVisionTransformer':
-                outputs = model.forward_features(inputs)
-                outputs = outputs[:, 0, :]
-                outputs = model.linear_rein(outputs)
-            else:
-                outputs = model(inputs)
-                outputs = model.linear(outputs)
+            outputs = model(inputs)
+        features_list.append(outputs.cpu())
+        targets_list.append(targets.cpu())
+    features_list = torch.cat(features_list, dim=0)
+    targets_list = torch.cat(targets_list, dim=0)
+
+    model.neigh.fit(features_list, targets_list)
+
+    total = 0
+    correct = 0
+    for batch_idx, (inputs, targets) in enumerate(valid_loader):
         total += targets.size(0)
-        _, predicted = outputs[:len(targets)].max(1)            
-        correct += predicted.eq(targets).sum().item()       
-
-    print(correct/total)    
-
+        with torch.no_grad():
+            features = model(inputs.to(device))
+            outputs = model.neigh.predict(features.cpu())
+        outputs = torch.tensor(outputs)
+        correct += outputs.eq(targets).sum().item()
+    print(correct/total)
 if __name__ =='__main__':
-    evalaute()
+    train()

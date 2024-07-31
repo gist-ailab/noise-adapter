@@ -1,7 +1,0 @@
-{
-    "epoch" : "80",
-    "id_dataset" : "/SSDb/yyg/data/Clothing1M",
-    "batch_size" : 64,
-    "save_path" : "/SSDb/yyg/RR/Clothing1M/",
-    "num_classes" : 14
-}

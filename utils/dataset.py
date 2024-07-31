@@ -2,7 +2,6 @@ import json
 import torch.utils.data as data
 import numpy as np
 import torch
-import torch.nn.functional as F
 import os
 import random
 
@@ -12,51 +11,131 @@ from torchvision import transforms
 from torchvision import datasets as dset
 import torchvision
 
-# mean = (0.485, 0.456, 0.406)
-# std = (0.229, 0.224, 0.225)
-cifar10_normalize =  transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-# cifar10_normalize = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-# cifar10_normalize = transforms.Normalize(mean, std)
+from .aptos import APTOS2019, APTOS2019_valid, APTOS2019TwoLabel
+from .chest14 import NIHchestXray
+from .idrid import IDRID
+from .chaoyang import CHAOYANG
+from .dr import DR
+from .fgadr import FGADR
 
-imagenet_normalize = transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+class ImageFolderTwoLabel(torchvision.datasets.ImageFolder):
+    def __getitem__(self, index: int):
+        """
+        Args:
+            index (int): Index
 
-size = 32
+        Returns:
+            tuple: (sample, target) where target is class_index of the target class.
+        """
+        path, target = self.samples[index]
+        sample = self.loader(path)
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        clean_label = self.ori_labels[index]
 
-# , transforms.Normalize(mean, std)
-train_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.RandomHorizontalFlip(), transforms.RandomCrop(size, padding=4),
-                               transforms.ToTensor(), cifar10_normalize])
-test_transform_cifar = transforms.Compose([transforms.Resize([size,size]), transforms.ToTensor(), cifar10_normalize])#, )
+        return sample, target, clean_label
+    
+def get_noise_dataset_with_cleanlabel(path, noise_rate = 0.2, batch_size = 32, seed = 0):
+    train_transform, test_transform = get_transform()
+    train_data = ImageFolderTwoLabel(path + '/train', train_transform)
+    np.random.seed(seed)
+    
+    new_data = []
+    ori_labels = []
+    for i in range(len(train_data.samples)):
+        ori_labels.append(train_data.samples[i][1])
+        if np.random.rand() > noise_rate: # clean sample:
+            new_data.append([train_data.samples[i][0], train_data.samples[i][1]])
+        else:
+            label_index = list(range(7))
+            label_index.remove(train_data.samples[i][1])
+            label_index = np.array(label_index)
+            label_index = np.reshape(label_index, (-1))
+
+            new_label = np.random.choice(label_index, 1)
+            new_label = new_label[0]
+            
+            new_data.append([train_data.samples[i][0], new_label])
+    train_data.samples = new_data
+    train_data.ori_labels = ori_labels
+
+    # Testing
+    with open('label.txt', 'w') as f:
+        for i in range(len(train_data.samples)):
+            f.write('{}\n'.format(train_data.samples[i][1]))
+
+    valid_data = torchvision.datasets.ImageFolder(path + '/test', test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 8)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
+def get_aptos_noise_dataset_with_cleanlabel(path, noise_rate = 0.2, batch_size = 32, seed = 0):
+    train_transform, test_transform = get_transform()
+    train_data = APTOS2019TwoLabel(path, train=True, transforms = train_transform)
+
+    np.random.seed(seed)
+    new_data = []
+    ori_labels = []
+    for i in range(len(train_data.samples)):
+        ori_labels.append(train_data.samples[i][1])
+        if np.random.rand() > noise_rate: # clean sample:
+            new_data.append([train_data.samples[i][0], train_data.samples[i][1]])
+        else:
+            label_index = list(range(5))
+            label_index.remove(train_data.samples[i][1])
+            label_index = np.array(label_index)
+            label_index = np.reshape(label_index, (-1))
+
+            new_label = np.random.choice(label_index, 1)
+            new_label = new_label[0]
+            
+            new_data.append([train_data.samples[i][0], new_label])
+    train_data.samples = new_data
+    train_data.ori_labels = ori_labels
+
+    # Testing
+    with open('label.txt', 'w') as f:
+        for i in range(len(train_data.samples)):
+            f.write('{}\n'.format(train_data.samples[i][1]))
+
+    valid_data = APTOS2019(path, train=False, transforms = test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
 
 
-# train_transform = transforms.Compose([transforms.Resize([224,224]), transforms.RandomHorizontalFlip(), transforms.ToTensor(), imagenet_normalize])
-# test_transform = transforms.Compose([transforms.Resize([224,224]), transforms.ToTensor(), imagenet_normalize])
+def get_transform(transform_type='default', image_size=224, args=None):
 
-train_transform =  transforms.Compose([transforms.Resize([256,256]), transforms.RandomCrop([224, 224]), transforms.RandomHorizontalFlip(), transforms.ToTensor(), imagenet_normalize])
-test_transform = transforms.Compose([transforms.Resize([256,256]), transforms.CenterCrop([224,224]), transforms.ToTensor(), imagenet_normalize])
+    if transform_type == 'default':
+        IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
+        IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
 
+        mean = IMAGENET_DEFAULT_MEAN
+        std = IMAGENET_DEFAULT_STD
 
-class masking_dataset(torch.utils.data.Dataset): 
-    def __init__(self, dataset, transform, ratio):
-        self.dataset = dataset
-        self.transform = transform
-        self.ratio = ratio
+        
+        train_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            # transforms.Resize((224, 224)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            # transforms.RandomVerticalFlip(p=0.5),
+            # transforms.ColorJitter(),
+            transforms.RandomCrop(size=(image_size, image_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std)
+        ])
 
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        x, y = self.dataset[idx]
-
-        x_ = x.clone()
-        _, H, W = x.shape
-
-        mshape = 1, round(H / 2), round(W / 2)
-        input_mask = torch.rand(mshape, device=x_.device)
-        input_mask = (input_mask > self.ratio).float()
-        input_mask = F.interpolate(input_mask.unsqueeze(0), scale_factor=2, mode='nearest')
-        masked_x = x_ * input_mask.squeeze(0)
-        return x, masked_x, y
-
+        test_transform = transforms.Compose([
+            transforms.Resize((256, 256)),
+            transforms.CenterCrop((image_size, image_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=mean, std=std)
+        ])
+    return train_transform, test_transform
 
 def read_conf(json_path):
     """
@@ -65,228 +144,312 @@ def read_conf(json_path):
     with open(json_path) as json_file:
         config = json.load(json_file)
     return config
-      
-def other_class(n_classes, current_class):
-    """
-    Returns a list of class indices excluding the class indexed by class_ind
-    :param nb_classes: number of classes in the task
-    :param class_ind: the class index to be omitted
-    :return: one random class that != class_ind
-    """
-    if current_class < 0 or current_class >= n_classes:
-        error_str = "class_ind must be within the range (0, nb_classes - 1)"
-        raise ValueError(error_str)
-
-    other_class_list = list(range(n_classes))
-    other_class_list.remove(current_class)
-    other_class = np.random.choice(other_class_list)
-    return other_class
-
-class cifar10Nosiy(torchvision.datasets.CIFAR10):
-    def __init__(self, root, train=True, transform=None, target_transform=None, download=True, nosiy_rate=0.0, asym=False):
-        np.random.seed(0)
-        # print(np.random.randn(5))
-        super(cifar10Nosiy, self).__init__(root, transform=transform, target_transform=target_transform, download=True)
-        if asym:
-            # automobile < - truck, bird -> airplane, cat <-> dog, deer -> horse
-            source_class = [9, 2, 3, 5, 4]
-            target_class = [1, 0, 5, 3, 7]
-            for s, t in zip(source_class, target_class):
-                cls_idx = np.where(np.array(self.targets) == s)[0]
-                n_noisy = int(nosiy_rate * cls_idx.shape[0])
-                noisy_sample_index = np.random.choice(cls_idx, n_noisy, replace=False)
-                for idx in noisy_sample_index:
-                    self.targets[idx] = t
-            return
-        elif nosiy_rate > 0:
-            n_samples = len(self.targets)
-            n_noisy = int(nosiy_rate * n_samples)
-            print("%d Noisy samples" % (n_noisy))
-            class_index = [np.where(np.array(self.targets) == i)[0] for i in range(10)]
-            class_noisy = int(n_noisy / 10)
-            noisy_idx = []
-            for d in range(10):
-                noisy_class_index = np.random.choice(class_index[d], class_noisy, replace=False)
-                # print(noisy_class_index[:10])
-                noisy_idx.extend(noisy_class_index)
-                # print("Class %d, number of noisy % d" % (d, len(noisy_class_index)))
-            for i in noisy_idx:
-                self.targets[i] = other_class(n_classes=10, current_class=self.targets[i])
-            print(len(noisy_idx))
-            # print("Print noisy label generation statistics:")
-            for i in range(10):
-                n_noisy = np.sum(np.array(self.targets) == i)
-                # print("Noisy class %s, has %s samples." % (i, n_noisy))
-            return
-
-class cifar100Nosiy(torchvision.datasets.CIFAR100):
-    def __init__(self, root, train=True, transform=None, target_transform=None, download=True, nosiy_rate=0.0, asym=False, seed=0):
-        super(cifar100Nosiy, self).__init__(root, download=download, transform=transform, target_transform=target_transform)
-        self.download = download
-        if asym:
-            """mistakes are inside the same superclass of 10 classes, e.g. 'fish'
-            """
-            nb_classes = 100
-            P = np.eye(nb_classes)
-            n = nosiy_rate
-            nb_superclasses = 20
-            nb_subclasses = 5
-
-            if n > 0.0:
-                for i in np.arange(nb_superclasses):
-                    init, end = i * nb_subclasses, (i+1) * nb_subclasses
-                    P[init:end, init:end] = build_for_cifar100(nb_subclasses, n)
-
-                    y_train_noisy = multiclass_noisify(np.array(self.targets), P=P, random_state=seed)
-                    actual_noise = (y_train_noisy != np.array(self.targets)).mean()
-                assert actual_noise > 0.0
-                print('Actual noise %.2f' % actual_noise)
-                self.targets = y_train_noisy.tolist()
-            return
-        elif nosiy_rate > 0:
-            n_samples = len(self.targets)
-            n_noisy = int(nosiy_rate * n_samples)
-            print("%d Noisy samples" % (n_noisy))
-            class_index = [np.where(np.array(self.targets) == i)[0] for i in range(100)]
-            class_noisy = int(n_noisy / 100)
-            noisy_idx = []
-            for d in range(100):
-                noisy_class_index = np.random.choice(class_index[d], class_noisy, replace=False)
-                noisy_idx.extend(noisy_class_index)
-                # print("Class %d, number of noisy % d" % (d, len(noisy_class_index)))
-            for i in noisy_idx:
-                self.targets[i] = other_class(n_classes=100, current_class=self.targets[i])
-            # print(len(noisy_idx))
-            # print("Print noisy label generation statistics:")
-            for i in range(100):
-                n_noisy = np.sum(np.array(self.targets) == i)
-                # print("Noisy class %s, has %s samples." % (i, n_noisy))
-            return
-
-def get_cifar_noisy(dataset, folder, batch_size, noisy_rate=0.2, asym=False):
-    if dataset == 'cifar10':
-        noisy_data = cifar10Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate, asym=asym)
-        test_data = dset.CIFAR10(folder, train=False, transform=test_transform_cifar, download=True)
-        num_classes = 10
-    if dataset == 'cifar100':
-        noisy_data = cifar100Nosiy(folder, train=True, transform=train_transform_cifar, nosiy_rate=noisy_rate, asym=asym)
-        test_data = dset.CIFAR100(folder, train=False, transform=test_transform_cifar, download=True)
-        num_classes = 100
-
-    train_loader = torch.utils.data.DataLoader(noisy_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
-    valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    
+def get_dataset(path):
+    train_transform, test_transform = get_transform()
+    train_data = torchvision.datasets.ImageFolder(path + '/train', train_transform)
+    valid_data = torchvision.datasets.ImageFolder(path + '/test', test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True, pin_memory=True, num_workers = 8)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=32, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
-def modify_train_loader_with_cluster(train_loader, cluster_ids, cluster_centers):
-    curr_dataset = train_loader.dataset
-    batch_size = train_loader.batch_size
-
-    class dataset_w_cluster():
-        def __init__(self, dataset, cluster_ids, cluster_centers) -> None:
-            self.dataset = dataset
-            self.cluster_ids = cluster_ids
-            self.cluster_centers = cluster_centers
-
-        def __len__(self):
-            return len(self.dataset)
-        
-        def __getitem__(self, idx):
-            x, y = self.dataset[idx]
-            cluster_id = self.cluster_ids[idx]
-            cluster_center = self.cluster_centers[cluster_id]
-
-            return x, y, cluster_id, cluster_center
-
-    cluster_dataset = dataset_w_cluster(curr_dataset, cluster_ids, cluster_centers)
-    train_loader = torch.utils.data.DataLoader(cluster_dataset, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
-    return train_loader
-
-def get_downsampled_imagenet(folder, batch_size):
-    from PIL import PngImagePlugin
-    Image.MAX_IMAGE_PIXELS = None
-    PngImagePlugin.MAX_TEXT_CHUNK = 1000 * (1024**2)
-    train_data = dset.ImageFolder(os.path.join(folder, 'train'), train_transform_cifar)
-    val_data = dset.ImageFolder(os.path.join(folder, 'val'), test_transform_cifar)
-
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
-    valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+def get_animal10n(path, batch_size):
+    train_transform, test_transform = get_transform()
+    train_data = torchvision.datasets.ImageFolder(path + '/training', train_transform)
+    valid_data = torchvision.datasets.ImageFolder(path + '/testing', test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 8)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
-def get_food101n(folder, batch_size):
-    train_data = dset.ImageFolder(os.path.join(folder, 'images'), transform = train_transform)
-    val_data = dset.Food101(os.path.join(folder, 'val'), split = 'test', transform = test_transform, download=True)
+def get_noise_dataset(path, noise_rate = 0.2, batch_size = 32, seed = 0):
+    train_transform, test_transform = get_transform()
+    train_data = torchvision.datasets.ImageFolder(path + '/train', train_transform)
+    np.random.seed(seed)
+    
+    new_data = []
+    for i in range(len(train_data.samples)):
+        if np.random.rand() > noise_rate: # clean sample:
+            new_data.append([train_data.samples[i][0], train_data.samples[i][1]])
+        else:
+            label_index = list(range(7))
+            label_index.remove(train_data.samples[i][1])
+            label_index = np.array(label_index)
+            label_index = np.reshape(label_index, (-1))
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
-    valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+            new_label = np.random.choice(label_index, 1)
+            new_label = new_label[0]
+            
+            new_data.append([train_data.samples[i][0], new_label])
+    train_data.samples = new_data
+
+    # Testing
+    with open('label.txt', 'w') as f:
+        for i in range(len(train_data.samples)):
+            f.write('{}\n'.format(train_data.samples[i][1]))
+
+    valid_data = torchvision.datasets.ImageFolder(path + '/test', test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 8)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
-def get_clothing1m(folder, batch_size):
-    train_data1 = dset.ImageFolder(os.path.join(folder, 'noisy_train'), transform = train_transform)
-    train_data2 = dset.ImageFolder(os.path.join(folder, 'clean_train'), transform = train_transform)
+def get_aptos_noise_dataset(path, noise_rate = 0.2, batch_size = 32, seed = 0):
+    train_transform, test_transform = get_transform()
+    train_data = APTOS2019(path, train=True, transforms = train_transform)
 
-    train_data1.samples.extend(train_data2.samples)
+    np.random.seed(seed)
+    new_data = []
+    for i in range(len(train_data.samples)):
+        if np.random.rand() > noise_rate: # clean sample:
+            new_data.append([train_data.samples[i][0], train_data.samples[i][1]])
+        else:
+            label_index = list(range(5))
+            label_index.remove(train_data.samples[i][1])
+            label_index = np.array(label_index)
+            label_index = np.reshape(label_index, (-1))
 
-    val_data = dset.ImageFolder(os.path.join(folder, 'clean_test'), transform = test_transform)
+            new_label = np.random.choice(label_index, 1)
+            new_label = new_label[0]
+            
+            new_data.append([train_data.samples[i][0], new_label])
+    train_data.samples = new_data
 
-    train_loader = torch.utils.data.DataLoader(train_data1, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
-    valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    # Testing
+    with open('label.txt', 'w') as f:
+        for i in range(len(train_data.samples)):
+            f.write('{}\n'.format(train_data.samples[i][1]))
+
+    valid_data = APTOS2019(path, train=False, transforms = test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
-def get_animal10n(folder, batch_size):
-    train_data = dset.ImageFolder(os.path.join(folder), transform = train_transform_cifar)
-    val_data = dset.ImageFolder(os.path.join(folder), transform = test_transform_cifar)
 
-    new_samples = []
-    for sample in train_data.samples:
-        sample_wd = sample[0].split('/')
-        if sample_wd[-2] == 'training':
-            new_samples.append([sample[0], int(sample_wd[-1][0])])
-    train_data.samples = new_samples
 
-    new_samples = []
-    for sample in val_data.samples:
-        sample_wd = sample[0].split('/')
-        if sample_wd[-2] == 'testing':
-            new_samples.append([sample[0], int(sample_wd[-1][0])])
-    val_data.samples = new_samples
+def get_mnist_noise_dataset(dataname, noise_rate = 0.2, batch_size = 32, seed = 0):
+    # from medmnist import NoduleMNIST3D
+    from medmnist import PathMNIST, BloodMNIST, OCTMNIST, TissueMNIST, OrganCMNIST
+    train_transform, test_transform = get_transform()
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True, pin_memory=True, num_workers = 4)
-    valid_loader = torch.utils.data.DataLoader(val_data, batch_size, shuffle=False, pin_memory=True, num_workers = 4)
+    if dataname == 'pathmnist':
+        train_data = PathMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = PathMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 9
+    if dataname == 'bloodmnist':
+        train_data = BloodMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = BloodMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 8
+    if dataname == 'octmnist':
+        train_data = OCTMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = OCTMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 4
+    if dataname == 'tissuemnist':
+        train_data = TissueMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = TissueMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 8
+    if dataname == 'organcmnist':
+        train_data = OrganCMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+        test_data = OrganCMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+        num_classes = 11
+
+    np.random.seed(seed)
+    # new_imgs = []
+    new_labels =[]
+    for i in range(len(train_data.imgs)):
+        if np.random.rand() > noise_rate: # clean sample:
+            # new_imgs.append(train_data.imgs[i])
+            new_labels.append(train_data.labels[i][0])
+        else:
+            label_index = list(range(num_classes))
+            label_index.remove(train_data.labels[i])
+            label_index = np.array(label_index)
+            label_index = np.reshape(label_index, (-1))
+
+            new_label = np.random.choice(label_index, 1)
+            new_label = new_label[0]
+            
+            # new_imgs.append(train_data.imgs[i])
+            new_labels.append(new_label)
+    # train_data.imgs = new_imgs
+    train_data.labels = new_labels
+
+    new_labels = []
+    for i in range(len(test_data.labels)):
+        new_labels.append(test_data.labels[i][0])
+    test_data.labels = new_labels
+
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
-def get_loader(folder, batch_size=32, noise_rate = 0.0, shuffle = True, filter_path=None):
-    # print(noise_rate)
 
-    train_data = dset.ImageFolder(os.path.join(folder, 'train'), transform = train_transform)
-    if noise_rate > 0.0:
-        new_samples = []
-        for data in train_data.samples:
-            if random.random()<0.2:
-                label = 0 if data[1] == 1 else 1
-            else:
-                label = data[1]
-            new_samples.append([data[0], label])
-            # print(data[1], label)
-        train_data.samples = new_samples
-    if not filter_path is None:
-        new_samples = []
-        with open(filter_path, 'r') as f:
-            lines = f.readlines()
-        for i, data in enumerate(train_data.samples):
-            label = lines[i].split('\n')
-            new_samples.append([data[0], int(label[0])])
-        train_data.samples = new_samples
-        
+def get_idrid_noise_dataset(path, noise_rate = 0.2, batch_size = 32, seed = 0):
+    train_transform, test_transform = get_transform()
+    train_data = IDRID(path, train=True, transforms = train_transform)
 
-    test_data = dset.ImageFolder(os.path.join(folder, 'test'), transform = test_transform)
+    np.random.seed(seed)
+    new_data = []
+    for i in range(len(train_data.samples)):
+        if np.random.rand() > noise_rate: # clean sample:
+            new_data.append([train_data.samples[i][0], train_data.samples[i][1]])
+        else:
+            label_index = list(range(5))
+            label_index.remove(train_data.samples[i][1])
+            label_index = np.array(label_index)
+            label_index = np.reshape(label_index, (-1))
 
+            new_label = np.random.choice(label_index, 1)
+            new_label = new_label[0]
+            
+            new_data.append([train_data.samples[i][0], new_label])
+    train_data.samples = new_data
 
-    train_loader = torch.utils.data.DataLoader(train_data, batch_size, shuffle=shuffle, pin_memory=True, num_workers = 8)
-    valid_loader = torch.utils.data.DataLoader(test_data, batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    # Testing
+    with open('label.txt', 'w') as f:
+        for i in range(len(train_data.samples)):
+            f.write('{}\n'.format(train_data.samples[i][1]))
+
+    valid_data = IDRID(path, train=False, transforms = test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
+
+def get_chaoyang_dataset(path, batch_size = 32, seed = 0):
+    train_transform, test_transform = get_transform()
+    train_data = CHAOYANG(path, train=True, transforms = train_transform)
+    valid_data = CHAOYANG(path, train=False, transforms = test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
+def get_dr(path, batch_size = 32):
+    train_transform, test_transform = get_transform()
+
+    train_data = DR(path, train=True, transforms = train_transform)
+    aptos_train_data = APTOS2019('./data/APTOS-2019', train=True, transforms = test_transform)
+    aptos_valid_data = APTOS2019_valid('./data/APTOS-2019', transforms = test_transform)
+    aptos_test_data = APTOS2019('./data/APTOS-2019', train=False, transforms = test_transform)
+    
+    fgadr_data = FGADR('./data/FGADR', transforms = test_transform)
+
+
+    aptos_train_data.samples.extend(aptos_valid_data.samples)
+    aptos_train_data.samples.extend(aptos_test_data.samples)
+
+    temp = {0: 0, 1:0, 2:0, 3:0, 4:0}
+    for sample in aptos_train_data.samples:
+        temp[sample[1]]+=1
+    print(temp)
+
+    temp = {0: 0, 1:0, 2:0, 3:0, 4:0}
+    for sample in fgadr_data.samples:
+        temp[sample[1]]+=1
+    print(temp)
+
+    import copy
+    total_set = copy.deepcopy(fgadr_data)
+    total_set.samples.extend(aptos_train_data.samples) 
+
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(aptos_train_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    fgadr_loader = torch.utils.data.DataLoader(fgadr_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    total_loader = torch.utils.data.DataLoader(total_set, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+
+    return train_loader, valid_loader, fgadr_loader, total_loader
+
+def get_nihxray(batch_size = 32):
+    from medmnist import ChestMNIST
+
+    train_transform, test_transform = get_transform()
+
+    def __modify_len__(self):
+        return self.imgs.shape[0]
+    ChestMNIST.__len__ = __modify_len__
+    train_data = ChestMNIST(split="train", download=True, size=224, transform= train_transform, as_rgb=True)
+    test_data = ChestMNIST(split="test", download=True, size=224, transform= test_transform, as_rgb=True)
+
+    # print(train_data.imgs)
+    # print(train_data.labels)
+    multi2single = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 ,13 ,14]
+
+    imgs = []
+    labels = []
+    for i in range(len(train_data.imgs)):
+        if (train_data.labels[i] != 0).sum() > 1:
+            pass
+        else:
+            imgs.append([train_data.imgs[i]])
+            label = ((train_data.labels[i] != 0) * multi2single).sum()
+            labels.append([label])
+    train_data.imgs = np.concatenate(imgs)
+    train_data.labels = np.concatenate(labels)
+    
+    # print(train_data.imgs.shape)
+    # print(train_data.labels.shape)
+
+
+    imgs = []
+    labels = []
+    for i in range(len(test_data.imgs)):
+        if (test_data.labels[i] != 0).sum() > 1:
+            pass
+        else:
+            imgs.append([test_data.imgs[i]])
+            label = ((test_data.labels[i] != 0) * multi2single).sum()
+            labels.append([label])
+    test_data.imgs = np.concatenate(imgs)
+    test_data.labels = np.concatenate(labels)
+
+    # print(test_data.imgs.shape)
+    # print(test_data.labels.shape)
+    # print(test_data)
+
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+    
+def get_cifar_noise_dataset(cifar, path, noise_rate = 0.2, batch_size = 32, seed = 0):
+    from .cifar import CIFAR10, CIFAR100
+    trainset = CIFAR10 if cifar == 'cifar10' else CIFAR100
+    train_transform, test_transform = get_transform()
+    train_data = trainset(path, train=True, transform = train_transform, noise_type = 'symmetric', noise_rate = noise_rate, download=True)
+    valid_data = trainset(path, train=False, transform = test_transform, download=True)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
+def get_clothing1m_dataset(path, batch_size = 32, seed = 0):
+    train_transform, test_transform = get_transform()
+    train_data = torchvision.datasets.ImageFolder(path + '/noisy_train', train_transform)
+    valid_data = torchvision.datasets.ImageFolder(path + '/clean_test', test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=False, num_workers = 8)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
+def get_webvision(path, batch_size= 32):
+    train_transform, test_transform = get_transform()
+    train_data = torchvision.datasets.ImageFolder(path + '/train', train_transform)
+    valid_data = torchvision.datasets.ImageFolder(path + '/val', test_transform)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=False, num_workers = 8)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
+def get_imagenet_loader(path, batch_size= 32):
+    train_transform, test_transform = get_transform()
+    valid_data = torchvision.datasets.ImageFolder(path + '/imagenet_val', test_transform)
+    
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return valid_loader
+
 
 if __name__ == '__main__':
-    # get_food101n('/SSDe/yyg/data/Food-101N_release', 2)
-    # get_clothing1m('/SSDe/yyg/data/Clothing1M', 2)
-    get_animal10n('/SSDb/yyg/data/animal10n', 2)
-
+    get_nihxray()
