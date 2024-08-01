@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 
 from .reins import Reins
 from .dino_v2 import DinoVisionTransformer
@@ -82,6 +83,13 @@ class LoRADinoVisionTransformer(nn.Module):
                 r,
                 self.alpha
             )
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        for w_A in self.w_As:
+            nn.init.kaiming_uniform_(w_A.weight, a=math.sqrt(5))
+        for w_B in self.w_Bs:
+            nn.init.zeros_(w_B.weight)
 
     def forward_features(self, x):
         return self.dino.forward_features(x)['x_prenorm'][:, 0]
