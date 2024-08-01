@@ -59,7 +59,7 @@ def train():
         train_loader, valid_loader = utils.get_webvision(data_path, batch_size=batch_size)   
     elif args.data == 'animal10n':
         train_loader, valid_loader = utils.get_animal10n(data_path, batch_size=batch_size)   
-        
+
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
@@ -126,6 +126,9 @@ def train():
         end_time = time.time()
         train_avg_loss = total_loss/len(train_loader)
         print()
+        end_time = time.time()
+        elasped_time = end_time-start_time
+        print(elasped_time)
 
         print(end_time-start_time)
         ## validation
