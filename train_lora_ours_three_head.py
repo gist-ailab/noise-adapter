@@ -100,8 +100,8 @@ def train():
     model2.eval()
 
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
-    optimizer2 = torch.optim.Adam(model2.parameters(), lr=1e-3, weight_decay = 1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer2 = torch.optim.Adam(model2.parameters(), lr=1e-3)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     scheduler2 = torch.optim.lr_scheduler.MultiStepLR(optimizer2, lr_decay)

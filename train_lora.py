@@ -6,6 +6,10 @@ import argparse
 import timm
 import numpy as np
 import utils
+import time
+
+from torch.cuda.amp.autocast_mode import autocast
+from torch.cuda.amp.grad_scaler import GradScaler
 
 import random
 import rein
@@ -102,22 +106,34 @@ def train():
     print('model_adapter: ', sum(p.numel() for n, p in model.named_parameters() if p.requires_grad and 'linear' in n))
     
     # f = open(os.path.join(save_path, 'epoch_acc.txt'), 'w')
+    scaler = GradScaler()
     avg_accuracy = 0.0
+
     for epoch in range(max_epoch):
         ## training
         model.train()
         total_loss = 0
         total = 0
         correct = 0
+        start_time = time.time()
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
             
-            features = model.forward_features(inputs)
-            outputs = model.linear(features)
-            loss = criterion(outputs, targets)
-            loss.backward()            
-            optimizer.step()
+            with autocast(enabled=True):
+                features = model.forward_features(inputs)
+                outputs = model.linear(features)
+                loss = criterion(outputs, targets)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
+            # with autocast(enabled=True):
+            # features = model.forward_features(inputs)
+            # outputs = model.linear(features)
+            # loss = criterion(outputs, targets)
+            # loss.backward()            
+            # optimizer.step()
 
             total_loss += loss
             total += targets.size(0)
@@ -125,10 +141,11 @@ def train():
             correct += predicted.eq(targets).sum().item()            
             print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                         % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')
-            train_accuracy = correct/total
-                  
+        train_accuracy = correct/total
+        end_time = time.time()
         train_avg_loss = total_loss/len(train_loader)
         print()
+        print(end_time-start_time)
 
         ## validation
         model.eval()

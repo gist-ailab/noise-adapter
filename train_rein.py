@@ -9,6 +9,7 @@ import utils
 
 import random
 import rein
+import time
 
 import dino_variant
 from sklearn.metrics import f1_score
@@ -103,6 +104,7 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
+        start_time = time.time()
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             inputs, targets = inputs.to(device), targets.to(device)
             optimizer.zero_grad()
@@ -121,10 +123,11 @@ def train():
             print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                         % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')
             train_accuracy = correct/total
-                  
+        end_time = time.time()
         train_avg_loss = total_loss/len(train_loader)
         print()
 
+        print(end_time-start_time)
         ## validation
         model.eval()
         total_loss = 0
