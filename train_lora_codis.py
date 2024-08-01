@@ -89,8 +89,8 @@ def train():
     model2.to(device)
 
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer1 = torch.optim.Adam(model1.parameters(), lr=1e-3, weight_decay = 1e-5)
-    optimizer2 = torch.optim.Adam(model2.parameters(), lr=1e-3, weight_decay = 1e-5)
+    optimizer1 = torch.optim.Adam(model1.parameters(), lr=1e-3)
+    optimizer2 = torch.optim.Adam(model2.parameters(), lr=1e-3)
 
     criterion = codis.loss_codis
     scheduler1 = torch.optim.lr_scheduler.MultiStepLR(optimizer1, lr_decay)
