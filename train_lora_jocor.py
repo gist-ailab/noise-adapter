@@ -124,11 +124,9 @@ def train():
             
             # Forward + Backward + Optimize
             features1 = model1.forward_features(inputs)
-            features1 = features1[:, 0, :]
             outputs1 = model1.linear(features1)
 
             features2 = model2.forward_features(inputs)
-            features2 = features2[:, 0, :]
             outputs2 = model2.linear(features2)
 
 
@@ -156,7 +154,7 @@ def train():
         total = 0
         correct = 0
 
-        valid_accuracy = utils.validation_accuracy_rein(model1, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy_lora(model1, valid_loader, device)
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy
             kappa =  utils.validation_kohen_kappa(model1, valid_loader, device)
