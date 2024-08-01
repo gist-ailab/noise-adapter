@@ -20,6 +20,7 @@ from .dino_layers import (
     PatchEmbed,
     SwiGLUFFNFused,
     MemEffAttention,
+    Attention,
     NestedTensorBlock as Block,
 )
 
@@ -68,7 +69,7 @@ class DinoVisionTransformer(nn.Module):
         init_values=None,  # for layerscale: None or 0 => no layerscale
         embed_layer=PatchEmbed,
         act_layer=nn.GELU,
-        block_fn=partial(Block, attn_class=MemEffAttention),
+        block_fn=partial(Block, attn_class=Attention),
         ffn_layer="mlp",
         block_chunks=1,
         out_indices=[7, 11, 15, 23],
