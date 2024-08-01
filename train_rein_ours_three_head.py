@@ -57,15 +57,15 @@ def train():
     elif args.data == 'animal10n':
         train_loader, valid_loader = utils.get_animal10n(data_path, batch_size=batch_size)   
         
-    num_samples = {}
-    for i in range(config['num_classes']):
-        num_samples[i] = 0
-    for sample in train_loader.dataset:
-        num_samples[sample[1]]+=1
-    print(num_samples)
+    # num_samples = {}
+    # for i in range(config['num_classes']):
+    #     num_samples[i] = 0
+    # for sample in train_loader.dataset:
+    #     num_samples[sample[1]]+=1
+    # print(num_samples)
     
-    class_weight = torch.tensor([sum(num_samples.values())/num_samples[x] for x in num_samples])
-    print(class_weight)
+    # class_weight = torch.tensor([sum(num_samples.values())/num_samples[x] for x in num_samples])
+    # print(class_weight)
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino

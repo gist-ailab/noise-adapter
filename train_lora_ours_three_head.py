@@ -57,15 +57,15 @@ def train():
     elif args.data == 'animal10n':
         train_loader, valid_loader = utils.get_animal10n(data_path, batch_size=batch_size)   
         
-    num_samples = {}
-    for i in range(config['num_classes']):
-        num_samples[i] = 0
-    for sample in train_loader.dataset:
-        num_samples[sample[1]]+=1
-    print(num_samples)
+    # num_samples = {}
+    # for i in range(config['num_classes']):
+    #     num_samples[i] = 0
+    # for sample in train_loader.dataset:
+    #     num_samples[sample[1]]+=1
+    # print(num_samples)
     
-    class_weight = torch.tensor([sum(num_samples.values())/num_samples[x] for x in num_samples])
-    print(class_weight)
+    # class_weight = torch.tensor([sum(num_samples.values())/num_samples[x] for x in num_samples])
+    # print(class_weight)
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -88,10 +88,10 @@ def train():
     # print(model.state_dict()['blocks.11.mlp.fc2.weight'])
     criterion = torch.nn.CrossEntropyLoss(reduction='none')
     model.eval()
-    
-    model2 = rein.ReinsDinoVisionTransformer(
-        **variant
-    )
+
+
+    dino = torch.hub.load('facebookresearch/dinov2', model_load)    
+    model2 = rein.LoRADinoVisionTransformer(dino)
     model2.load_state_dict(dino_state_dict, strict=False)
     model2.linear_rein = nn.Linear(variant['embed_dim'], config['num_classes'])
     model2.to(device)
@@ -124,19 +124,17 @@ def train():
             optimizer.zero_grad()
             
             features_rein = model.forward_features(inputs)
-            features_rein = features_rein[:, 0, :]
+            features_rein = features_rein
             outputs = model.linear_rein(features_rein)
 
             features_rein2 = model2.forward_features(inputs)
-            features_rein2 = features_rein2[:, 0, :]
+            features_rein2 = features_rein2
             outputs2 = model2.linear_rein(features_rein2)
 
             with torch.no_grad():
                 # features_ = model.forward_features_no_rein(inputs)
-                features_ = model.forward_features_no_rein(inputs)
-                features_ = features_[:, 0, :]
+                features_ = model.forward_features_no_lora(inputs)
             outputs_ = model.linear(features_)
-            # print(outputs.shape, outputs_.shape)
 
             with torch.no_grad():
                 pred = (outputs_).max(1).indices
@@ -179,15 +177,15 @@ def train():
         total_loss = 0
         total = 0
         correct = 0
-        valid_accuracy = utils.validation_accuracy_ours(model2, valid_loader, device)
-        valid_accuracy_ = utils.validation_accuracy_ours(model, valid_loader, device)
-        valid_accuracy_linear = utils.validation_accuracy_linear(model, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy_ours(model2, valid_loader, device, adapter='lora')
+        valid_accuracy_ = utils.validation_accuracy_ours(model, valid_loader, device, adapter='lora')
+        valid_accuracy_linear = utils.validation_accuracy_lora_linear(model, valid_loader, device)
         
         scheduler.step()
         scheduler2.step()
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
-            kappa =  utils.validation_kohen_kappa_ours(model2, valid_loader, device)
+            kappa =  1# utils.validation_kohen_kappa_ours(model2, valid_loader, device)
             avg_kappa += kappa
         saver.save_checkpoint(epoch, metric = valid_accuracy)
         print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID_2 [acc - {:.4f}], VALID_1 [acc - {:.4f}], VALID(linear) [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy, valid_accuracy_, valid_accuracy_linear))

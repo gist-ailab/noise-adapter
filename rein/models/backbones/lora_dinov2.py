@@ -54,7 +54,7 @@ class LoRADinoVisionTransformer(nn.Module):
 
         print(self.dino)
         r = 4
-        alpha = 4
+        self.alpha = 4
         self.w_As = []  # These are linear layers
         self.w_Bs = []
         # lets freeze first
@@ -65,26 +65,40 @@ class LoRADinoVisionTransformer(nn.Module):
         for t_layer_i, blk in enumerate(self.dino.blocks):
             w_qkv_linear = blk.attn.qkv
             self.dim = w_qkv_linear.in_features
-            w_a_linear_q = nn.Linear(self.dim, r, bias=False)
-            w_b_linear_q = nn.Linear(r, self.dim, bias=False)
-            w_a_linear_v = nn.Linear(self.dim, r, bias=False)
-            w_b_linear_v = nn.Linear(r, self.dim, bias=False)
-            self.w_As.append(w_a_linear_q)
-            self.w_Bs.append(w_b_linear_q)
-            self.w_As.append(w_a_linear_v)
-            self.w_Bs.append(w_b_linear_v)
+            w_a_lora_linear_q = nn.Linear(self.dim, r, bias=False)
+            w_b_lora_linear_q = nn.Linear(r, self.dim, bias=False)
+            w_a_lora_linear_v = nn.Linear(self.dim, r, bias=False)
+            w_b_lora_linear_v = nn.Linear(r, self.dim, bias=False)
+            self.w_As.append(w_a_lora_linear_q)
+            self.w_Bs.append(w_b_lora_linear_q)
+            self.w_As.append(w_a_lora_linear_v)
+            self.w_Bs.append(w_b_lora_linear_v)
             blk.attn.qkv = _LoRA_qkv_timm(
                 w_qkv_linear,
-                w_a_linear_q,
-                w_b_linear_q,
-                w_a_linear_v,
-                w_b_linear_v,
+                w_a_lora_linear_q,
+                w_b_lora_linear_q,
+                w_a_lora_linear_v,
+                w_b_lora_linear_v,
                 r,
-                alpha
+                self.alpha
             )
 
     def forward_features(self, x):
-        return self.dino.forward_features(x)['x_norm_clstoken']
+        return self.dino.forward_features(x)['x_prenorm'][:, 0]
+
+    def forward_features_no_lora(self, x):
+        self.set_no_lora()
+        x = self.dino.forward_features(x)['x_prenorm'][:, 0]
+        self.set_lora()
+        return x
+
+    def set_no_lora(self):
+        for t_layer_i, blk in enumerate(self.dino.blocks):
+            blk.attn.qkv.alpha = 0
+
+    def set_lora(self):
+        for t_layer_i, blk in enumerate(self.dino.blocks):
+            blk.attn.qkv.alpha = self.alpha
 
     def train(self, mode: bool = True):
         if not mode:

@@ -78,7 +78,7 @@ def train():
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
-    print(model)
+    # print(model)
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
     
@@ -88,11 +88,19 @@ def train():
         print(class_weight)
         criterion = torch.nn.CrossEntropyLoss(weight=class_weight)
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 0)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
-    print(train_loader.dataset[0][0].shape)
+    # print(train_loader.dataset[0][0].shape)
 
+    # print(model)
+    # for n, p in model.named_parameters():
+    #     print(n)
+    # for 
+    model.train()
+    print('model: ', sum(p.numel() for p in model.parameters()))
+    print('model_adapter: ', sum(p.numel() for n, p in model.named_parameters() if p.requires_grad and 'linear' in n))
+    
     # f = open(os.path.join(save_path, 'epoch_acc.txt'), 'w')
     avg_accuracy = 0.0
     for epoch in range(max_epoch):
@@ -128,7 +136,7 @@ def train():
         total = 0
         correct = 0
 
-        valid_accuracy = utils.validation_accuracy_rein(model, valid_loader, device)
+        valid_accuracy = utils.validation_accuracy_lora(model, valid_loader, device)
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
         scheduler.step()
