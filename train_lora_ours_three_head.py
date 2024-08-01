@@ -12,6 +12,8 @@ import rein
 
 import dino_variant
 
+from torch.cuda.amp.autocast_mode import autocast
+from torch.cuda.amp.grad_scaler import GradScaler
 
 def train():
     parser = argparse.ArgumentParser()
