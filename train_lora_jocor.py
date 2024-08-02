@@ -130,7 +130,7 @@ def train():
             outputs2 = model2.linear(features2)
 
 
-            loss_1, loss_2 = criterion(outputs1, outputs2, targets, rate_schedule[epoch], class_weight=class_weight)
+            loss_1, loss_2 = criterion(outputs1, outputs2, targets, rate_schedule[epoch])
             loss_1.backward()            
             optimizer.step()
 
@@ -157,7 +157,7 @@ def train():
         valid_accuracy = utils.validation_accuracy_lora(model1, valid_loader, device)
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy
-            kappa =  utils.validation_kohen_kappa(model1, valid_loader, device)
+            kappa = 1# utils.validation_kohen_kappa(model1, valid_loader, device)
             avg_kappa += kappa
         scheduler.step()
 
