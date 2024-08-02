@@ -131,6 +131,20 @@ def train():
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
 
+    elif args.net == 'bioCLIP':
+        from open_clip import create_model_from_pretrained, get_tokenizer # works on open-clip-torch>=2.23.0, timm>=0.9.8
+
+        model, preprocess = create_model_from_pretrained('hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224')
+        tokenizer = get_tokenizer('hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224')
+        # print(model)
+        model = model.visual.trunk
+        bioCLIP_state_dict = model.state_dict()
+        # print(state_dict)
+        model = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
+        model.load_state_dict(bioCLIP_state_dict, strict=True)
+        model.linear = nn.Linear(768, config['num_classes'])
+        model.to(device)  
+        
     print(model)
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()

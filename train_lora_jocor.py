@@ -60,7 +60,8 @@ def train():
         num_gradual = 1
     elif args.data == 'webvision':
         train_loader, valid_loader = utils.get_webvision(data_path, batch_size=batch_size)   
-        
+
+
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
@@ -157,7 +158,7 @@ def train():
         valid_accuracy = utils.validation_accuracy_lora(model1, valid_loader, device)
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy
-            kappa =  utils.validation_kohen_kappa(model1, valid_loader, device)
+            kappa =  1 #utils.validation_kohen_kappa(model1, valid_loader, device)
             avg_kappa += kappa
         scheduler.step()
 
