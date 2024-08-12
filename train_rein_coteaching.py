@@ -36,7 +36,7 @@ def train():
         os.mkdir(save_path)
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
-    num_gradual = 10
+    num_gradual = 3
     
     if args.data == 'ham10000':
         train_loader, valid_loader = utils.get_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)

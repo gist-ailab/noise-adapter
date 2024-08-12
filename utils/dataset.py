@@ -425,6 +425,19 @@ def get_cifar_noise_dataset(cifar, path, noise_rate = 0.2, batch_size = 32, seed
     valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
     return train_loader, valid_loader
 
+    
+def get_cifar_noise_dataset_with_cleanlabel(cifar, path, noise_rate = 0.2, batch_size = 32, seed = 0):
+    from .cifar import CIFAR10, CIFAR100, CIFAR10_w_clean
+    trainset = CIFAR10 if cifar == 'cifar10' else CIFAR100
+    train_transform, test_transform = get_transform()
+    train_data = CIFAR10_w_clean(path, train=True, transform = train_transform, noise_type = 'symmetric', noise_rate = noise_rate, download=True)
+    valid_data = trainset(path, train=False, transform = test_transform, download=True)
+    
+    train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers = 16)
+    valid_loader = torch.utils.data.DataLoader(valid_data, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers = 8)
+    return train_loader, valid_loader
+
+
 def get_clothing1m_dataset(path, batch_size = 32, seed = 0):
     train_transform, test_transform = get_transform()
     train_data = torchvision.datasets.ImageFolder(path + '/noisy_train', train_transform)

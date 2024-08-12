@@ -41,6 +41,8 @@ def train():
         train_loader, valid_loader = utils.get_noise_dataset_with_cleanlabel(data_path, noise_rate=noise_rate, batch_size = batch_size)
     if args.data == 'aptos':
         train_loader, valid_loader = utils.get_aptos_noise_dataset_with_cleanlabel(data_path, noise_rate=noise_rate, batch_size = batch_size)
+    elif 'cifar' in args.data:
+        train_loader, valid_loader = utils.get_cifar_noise_dataset_with_cleanlabel(args.data, data_path, batch_size = batch_size,  noise_rate=noise_rate)
 
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -111,6 +113,7 @@ def train():
             inputs, targets, cleans = inputs.to(device), targets.to(device), cleans.to(device)
             optimizer.zero_grad()
             
+            # print(targets.shape, cleans.shape)
             
             features_rein = model.forward_features(inputs)
             features_rein = features_rein[:, 0, :]
@@ -131,6 +134,7 @@ def train():
                 linear_accurate = (pred==targets) # Prediction on training set (TP+FP) (1 for Clean)
                 true_accurate = (cleans==targets) # Clean or Noise () (1 for Clean)
                 correct_accurate = (linear_accurate & true_accurate) # TP
+                # print(linear_accurate.shape, true_accurate.shape, correct_accurate.shape)
                 tpfp += linear_accurate.sum()
                 tp += correct_accurate.sum()
                 tpfn += true_accurate.sum()

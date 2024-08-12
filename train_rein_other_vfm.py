@@ -235,6 +235,7 @@ def train():
         model.load_state_dict(bioCLIP_state_dict, strict=False)
         model.linear = nn.Linear(768, config['num_classes'])
         model.to(device)  
+        
     print(model)
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
