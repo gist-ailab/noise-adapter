@@ -76,9 +76,12 @@ def train():
 
     dino = torch.hub.load('facebookresearch/dinov2', model_load)
     dino_state_dict = dino.state_dict()
-
+    new_state_dict = dict()
+    for k in dino_state_dict.keys():
+        new_k = k.replace("attn.qkv", "attn.qkv.qkv")
+        new_state_dict[new_k] = dino_state_dict[k]
     model = rein.LoRADinoVisionTransformer(dino)
-    model.load_state_dict(dino_state_dict, strict=False)
+    model.dino.load_state_dict(new_state_dict, strict=False)
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
@@ -86,21 +89,9 @@ def train():
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
     
-    if args.data == 'dr':
-        num_samples = {0: 25810, 1: 2443, 2: 5292, 3: 873, 4: 708}
-        class_weight = torch.tensor([1-num_samples[x]/sum(num_samples.values()) for x in num_samples]).to(device)
-        print(class_weight)
-        criterion = torch.nn.CrossEntropyLoss(weight=class_weight)
-    # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 0)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
-    # print(train_loader.dataset[0][0].shape)
-
-    # print(model)
-    # for n, p in model.named_parameters():
-    #     print(n)
-    # for 
     model.train()
     print('model: ', sum(p.numel() for p in model.parameters()))
     print('model_adapter: ', sum(p.numel() for n, p in model.named_parameters() if p.requires_grad and 'linear' in n))
@@ -127,13 +118,6 @@ def train():
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-
-            # with autocast(enabled=True):
-            # features = model.forward_features(inputs)
-            # outputs = model.linear(features)
-            # loss = criterion(outputs, targets)
-            # loss.backward()            
-            # optimizer.step()
 
             total_loss += loss
             total += targets.size(0)

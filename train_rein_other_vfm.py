@@ -10,6 +10,7 @@ import utils
 
 import random
 import rein
+import lora
 # import open_clip
 # import clip
 import adaptformer
@@ -34,6 +35,7 @@ def set_requires_grad(model: nn.Module, keywords):
             num_trainable += param.numel()
             params.append(param)
         else:
+            # print(name, 'no_grad')
             param.requires_grad = False
     return params
 
@@ -133,7 +135,14 @@ def train():
             dst_weight = dst_weight.to(src_weight.dtype)
             new_state_dict['pos_embed'] = torch.cat((extra_tokens, dst_weight), dim=1)
             model = adaptformer.VisionTransformer(patch_size=14, tuning_config =  tuning_config, use_dinov2=True)
-        model.load_state_dict(new_state_dict, strict=False)
+        if args.adapter == 'lora':
+            model = rein.LoRADinoVisionTransformer(model)
+            new_state_dict = dict()
+            for k in dino_state_dict.keys():
+                new_k = k.replace("attn.qkv", "attn.qkv.qkv")
+                new_state_dict[new_k] = dino_state_dict[k]
+
+            model.dino.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
 
@@ -152,8 +161,12 @@ def train():
             )
         if args.adapter == 'adaptformer' or args.adapter == 'vpt':
             model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
-
-        model.load_state_dict(new_state_dict, strict=False)
+        if args.adapter == 'lora':
+            model_ = timm.create_model('vit_base_patch16_224', pretrained=False)
+            model_.load_state_dict(dino_state_dict, strict=False)
+            model = lora.LoRA_ViT_timm(model_, 4, 4)
+        else:
+            model.load_state_dict(new_state_dict, strict=True)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
         # print('aa')
@@ -210,7 +223,12 @@ def train():
             )
         if args.adapter == 'adaptformer' or args.adapter == 'vpt':
             model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
-        model.load_state_dict(new_state_dict, strict=False)
+        if args.adapter == 'lora':
+            model_ = timm.create_model('vit_base_patch16_224', pretrained=False)
+            model_.load_state_dict(dino_state_dict, strict=False)
+            model = lora.LoRA_ViT_timm(model_, 4, 4)
+        else:
+            model.load_state_dict(new_state_dict, strict=True)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
         model.to(device)  
 
@@ -232,7 +250,15 @@ def train():
             model = rein.ReinsDinoVisionTransformer(
                 **variant
             )
-        model.load_state_dict(bioCLIP_state_dict, strict=False)
+        if args.adapter == 'adaptformer' or args.adapter == 'vpt':
+            model = adaptformer.VisionTransformer(patch_size=16, tuning_config =  tuning_config)
+            
+        if args.adapter == 'lora':
+            model_ = timm.create_model('vit_base_patch16_224', pretrained=False)
+            model_.load_state_dict(bioCLIP_state_dict, strict=False)
+            model = lora.LoRA_ViT_timm(model_, 4, 4)
+        else:
+            model.load_state_dict(new_state_dict, strict=True)
         model.linear = nn.Linear(768, config['num_classes'])
         model.to(device)  
         
@@ -241,8 +267,8 @@ def train():
     model.eval()
 
     
-    if args.adapter == 'adaptformer' or args.adapter == 'vpt':
-        params = set_requires_grad(model, ['adapt', 'linear', 'embeddings'])
+    if args.adapter == 'adaptformer' or args.adapter == 'vpt' or args.adapter == 'lora':
+        set_requires_grad(model, ['adapt', 'linear', 'embeddings'])
         # print(params)
     # optimizer = torch.optim.SGD(model.parameters(), lr = 0.01, momentum=0.9, weight_decay = 1e-05)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)

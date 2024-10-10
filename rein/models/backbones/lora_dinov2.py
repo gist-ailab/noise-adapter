@@ -94,7 +94,7 @@ class LoRADinoVisionTransformer(nn.Module):
     def forward_features(self, x):
         return self.dino.forward_features(x)['x_prenorm'][:, 0]
 
-    def forward_features_no_lora(self, x):
+    def forward_features_no_rein(self, x):
         self.set_no_lora()
         x = self.dino.forward_features(x)['x_prenorm'][:, 0]
         self.set_lora()
